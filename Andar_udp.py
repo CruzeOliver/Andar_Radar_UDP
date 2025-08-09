@@ -280,7 +280,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
     def on_frame_ready(self, frame: bytes, sample: int, chirp: int, txrx: int):
         if txrx == 4:
             iq = self.reorder_frame(frame, sample, chirp)  # (4, chirp, sample)
-        # 我们取第一个 chirp 的时域 I/Q 波形的幅度
+
         t = np.arange(sample)
         for ant_idx, widget in enumerate([
             self.widget_tx0rx0,
@@ -288,9 +288,11 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             self.widget_tx1rx0,
             self.widget_tx1rx1
         ]):
-            mag = np.abs(iq[ant_idx, 0, :])  # 幅值
+            I = np.real(iq[ant_idx, 0, :])  # 实部
+            Q = np.imag(iq[ant_idx, 0, :])  # 虚部
             widget.clear()
-            widget.plot(t, mag, pen='y')  # pen 可改颜色，比如 'r', 'g', 'b'
+            widget.plot(t, I, pen='r')  # 红色画I
+            widget.plot(t, Q, pen='b')  # 蓝色画Q
 
     def closeEvent(self, e):
         self.UDP_disconnect()
