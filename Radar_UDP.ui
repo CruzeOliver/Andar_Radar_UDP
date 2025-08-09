@@ -120,13 +120,13 @@
        </attribute>
        <layout class="QGridLayout" name="gridLayout_2">
         <item row="0" column="1">
-         <widget class="QWidget" name="widget_tx0rx1" native="true"/>
+         <widget class="PlotWidget" name="widget_tx0rx1" native="true"/>
         </item>
         <item row="1" column="0">
-         <widget class="QWidget" name="widget_tx1rx0" native="true"/>
+         <widget class="PlotWidget" name="widget_tx1rx0" native="true"/>
         </item>
         <item row="1" column="1">
-         <widget class="QWidget" name="widget_tx1rx1" native="true"/>
+         <widget class="PlotWidget" name="widget_tx1rx1" native="true"/>
         </item>
         <item row="0" column="0">
          <widget class="PlotWidget" name="widget_tx0rx0" native="true"/>
@@ -173,7 +173,7 @@
    <sender>pushButton_Connect</sender>
    <signal>clicked()</signal>
    <receiver>MainWindow</receiver>
-   <slot>UDP_connct()</slot>
+   <slot>UDP_connect()</slot>
    <hints>
     <hint type="sourcelabel">
      <x>911</x>
