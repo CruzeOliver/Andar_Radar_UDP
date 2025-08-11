@@ -282,28 +282,28 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         """
          # 保存到 .mat 文件
         if self.checkBox_IsSave.isChecked():
-            if save_to_mat(frame, "raw_data.mat"):
+            if save_to_mat(frame,sample,chirp,"raw_data.mat"):
                 self.bus.log.emit("[OK] 原始数据已保存到 raw_data.mat")
             else:
                 self.bus.log.emit("[ERR] 保存原始数据失败")
         # 如果是2发2收信号，对数据进行重组，返回重组完成后的IQ数据
         if txrx == 4:
             iq = reorder_frame(frame, sample, chirp)  # (4, chirp, sample)
-        # 绘制时域 I/Q 波形
-        t = np.arange(sample)
-        for ant_idx, (key, ax) in enumerate(self.ax_dict.items()):
-            I = np.real(iq[ant_idx, 0, :])  # 实部
-            Q = np.imag(iq[ant_idx, 0, :])  # 虚部
-            ax.clear()  # 清除之前的图像
+        # # 绘制时域 I/Q 波形
+        # t = np.arange(sample)
+        # for ant_idx, (key, ax) in enumerate(self.ax_dict.items()):
+        #     I = np.real(iq[ant_idx, 0, :])  # 实部
+        #     Q = np.imag(iq[ant_idx, 0, :])  # 虚部
+        #     ax.clear()  # 清除之前的图像
 
-            # 绘制 I 和 Q 波形
-            ax.plot(t, I, label='I', color='r')  # 红色绘制 I
-            ax.plot(t, Q, label='Q', color='b')  # 蓝色绘制 Q
-            self.init_plot(ax)
+        #     # 绘制 I 和 Q 波形
+        #     ax.plot(t, I, label='I', color='r')  # 红色绘制 I
+        #     ax.plot(t, Q, label='Q', color='b')  # 蓝色绘制 Q
+        #     #init_ADC4_plot(ax)
 
-            # 更新图形
-            ax.legend(loc='best')
-            self.canvas_dict[key].draw()  # 更新画布
+        #     # 更新图形
+        #     ax.legend(loc='best')
+        #     self.canvas_dict[key].draw()  # 更新画布
     def ReadFile(self):
         """
         打开文件对话框，选择 .mat 文件并读取数据
@@ -329,7 +329,11 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             # 获取所有包含帧数据的变量（以 "frame" 开头的变量名）
             self.frame_data_list = [key for key in data.keys() if key.startswith('frame')]
             self.current_index = 0  # 初始化为第一帧
-            self.show_matrix(data[self.frame_data_list[self.current_index]])  # 显示第一帧
+            # 获取第一帧的数据
+            frame_data = data[self.frame_data_list[self.current_index]]
+            # 转置数据（列优先转行优先）
+            frame_data = frame_data.T  # 转置数据，确保行优先
+            self.show_matrix(frame_data)  # 显示第一帧
         except Exception as e:
             print(f"读取文件时出错: {e}")
             QMessageBox.warning(self, "读取失败", f"读取文件失败：{e}")
@@ -338,10 +342,10 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         """
         显示当前帧的数据
         """
-        res = self._asm.process(frame_data)
-        if res is not None:
-            frame, sample, chirp, txrx = res
-            self.bus.frame_ready.emit(frame, sample, chirp, txrx)
+        # res = self._asm.process(frame_data)
+        # if res is not None:
+        #     frame, sample, chirp, txrx = res
+        #     self.bus.frame_ready.emit(frame, sample, chirp, txrx)
 
         print(f"显示当前帧数据：{frame_data}")
 
