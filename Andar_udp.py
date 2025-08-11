@@ -2,12 +2,14 @@ from UI.Ui_Radar_UDP import Ui_MainWindow
 import sys, socket, threading, struct
 from dataclasses import dataclass
 from PyQt5.QtCore import QObject, pyqtSignal
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QFileDialog, QMessageBox
 import numpy as np
 import pyqtgraph as pg
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
-from plot_utils import init_ADC4_plot
+from plot_utils import *
+from data_processing import *
+import scipy.io
 
 # ================== 协议/网络参数 ==================
 LISTEN_IP   = "0.0.0.0"        # 监听所有网卡
@@ -227,7 +229,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             'tx1rx1': QVBoxLayout(self.widget_tx1rx1)
         }
 
-        # 初始化 Matplotlib 图形
+        # 将Mathplotlib 图形与widgets关联
         for key, layout in self.layout_dict.items():
             fig, ax = plt.subplots(figsize=(0, 0))
             canvas = FigureCanvas(fig)
@@ -272,60 +274,87 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             self.tx_sock = None
         self.bus.log.emit("[OK] 已断开")
 
-    def reorder_frame(self, frame_bytes: bytes, sample: int, chirp: int, window: np.ndarray | None = None):
-        n_ant = 4
-        expected_bytes = chirp * n_ant * sample * 2 * 2  # chirp * 天线 * 样点 * (IQ) * int16
-        if len(frame_bytes) != expected_bytes:
-            raise ValueError(f"帧大小不匹配: got {len(frame_bytes)}, expect {expected_bytes}")
-
-        # 读取为 int16，右移4位（除以16）
-        arr_iq = np.frombuffer(frame_bytes, dtype=np.int16).astype(np.float32) / 16.0  # I,Q 交替
-        arr_iq = arr_iq.reshape(chirp, n_ant, sample, 2)  # (chirp, ant, sample, IQ)
-
-        I = arr_iq[..., 0]
-        Q = arr_iq[..., 1]
-        iq = I + 1j * Q  # (chirp, ant, sample)
-
-        # 原始顺序 [TX0RX0, TX1RX0, TX0RX1, TX1RX1] → 虚拟天线 [0, 2, 1, 3]
-        virtual_ant_map = [0, 2, 1, 3]
-        iq = iq[:, virtual_ant_map, :]          # (chirp, 4, sample)
-        iq = np.transpose(iq, (1, 0, 2))        # -> (4, chirp, sample)
-
-        if window is not None:
-            if len(window) != sample:
-                raise ValueError("window 长度必须等于 sample")
-            iq = iq * window[np.newaxis, np.newaxis, :]
-
-        return iq
-
 
     # ---- 整帧到达回调：在这里做解析/计算/存档/绘图 ----
     def on_frame_ready(self, frame: bytes, sample: int, chirp: int, txrx: int):
         """
-        接收到一帧数据后，绘制 I/Q 波形
+        数据格式正确,接收到一帧数据后回调函数
         """
+         # 保存到 .mat 文件
+        if self.checkBox_IsSave.isChecked():
+            if save_to_mat(frame, "raw_data.mat"):
+                self.bus.log.emit("[OK] 原始数据已保存到 raw_data.mat")
+            else:
+                self.bus.log.emit("[ERR] 保存原始数据失败")
+        # 如果是2发2收信号，对数据进行重组，返回重组完成后的IQ数据
         if txrx == 4:
-            iq = self.reorder_frame(frame, sample, chirp)  # (4, chirp, sample)
-
-        # 获取时域 I/Q 波形
+            iq = reorder_frame(frame, sample, chirp)  # (4, chirp, sample)
+        # 绘制时域 I/Q 波形
         t = np.arange(sample)
-
         for ant_idx, (key, ax) in enumerate(self.ax_dict.items()):
             I = np.real(iq[ant_idx, 0, :])  # 实部
             Q = np.imag(iq[ant_idx, 0, :])  # 虚部
-
             ax.clear()  # 清除之前的图像
 
             # 绘制 I 和 Q 波形
             ax.plot(t, I, label='I', color='r')  # 红色绘制 I
             ax.plot(t, Q, label='Q', color='b')  # 蓝色绘制 Q
-
-            # 重新绘制坐标轴和标题
             self.init_plot(ax)
 
             # 更新图形
             ax.legend(loc='best')
             self.canvas_dict[key].draw()  # 更新画布
+    def ReadFile(self):
+        """
+        打开文件对话框，选择 .mat 文件并读取数据
+        """
+        file_dialog = QFileDialog(self, "Open MAT File")
+        file_dialog.setNameFilter("MAT files (*.mat)")
+        if file_dialog.exec_():
+            file_path = file_dialog.selectedFiles()[0]
+            self.read_mat_file(file_path)
+
+    def read_mat_file(self, filename):
+        """
+        读取 MAT 文件中的数据
+        """
+        try:
+            # 读取 .mat 文件
+            data = scipy.io.loadmat(filename)
+
+            # 打印文件中包含的变量
+            print(f"读取文件：{filename}")
+            print(f"文件中包含的变量：{list(data.keys())}")
+
+            # 获取所有包含帧数据的变量（以 "frame" 开头的变量名）
+            self.frame_data_list = [key for key in data.keys() if key.startswith('frame')]
+            self.current_index = 0  # 初始化为第一帧
+            self.show_matrix(data[self.frame_data_list[self.current_index]])  # 显示第一帧
+        except Exception as e:
+            print(f"读取文件时出错: {e}")
+            QMessageBox.warning(self, "读取失败", f"读取文件失败：{e}")
+
+    def show_matrix(self, frame_data):
+        """
+        显示当前帧的数据
+        """
+        res = self._asm.process(frame_data)
+        if res is not None:
+            frame, sample, chirp, txrx = res
+            self.bus.frame_ready.emit(frame, sample, chirp, txrx)
+
+        print(f"显示当前帧数据：{frame_data}")
+
+    def ShowNextFrame(self):
+        if self.current_index < len(self.frame_data_list) - 1:
+            self.current_index += 1
+            self.show_matrix(self.frame_data_list[self.current_index])
+        else:
+            QMessageBox.information(self, "没有更多数据", "已到达文件末尾！")
+
+    def CloseFile(self):
+        self.frame_data_list = []  # 清空数据
+        self.current_index = 0  # 重置索引
 
     def closeEvent(self, e):
         self.UDP_disconnect()

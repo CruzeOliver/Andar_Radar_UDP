@@ -42,7 +42,48 @@
         </widget>
        </item>
        <item>
-        <layout class="QVBoxLayout" name="verticalLayout_3"/>
+        <widget class="QCheckBox" name="checkBox_IsSave">
+         <property name="layoutDirection">
+          <enum>Qt::RightToLeft</enum>
+         </property>
+         <property name="text">
+          <string>Is Save Mat</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="pushButton_ReadFile">
+         <property name="text">
+          <string>ReadFile</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="pushButton_Next">
+         <property name="text">
+          <string>Next</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="pushButton_CloseFile">
+         <property name="text">
+          <string>CloseFile</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
        </item>
       </layout>
      </widget>
@@ -221,9 +262,60 @@
     </hint>
    </hints>
   </connection>
+  <connection>
+   <sender>pushButton_ReadFile</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>ReadFile()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>853</x>
+     <y>140</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>806</x>
+     <y>124</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_Next</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>ShowNextFrame()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>961</x>
+     <y>173</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>805</x>
+     <y>197</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_CloseFile</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>CloseFile()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>877</x>
+     <y>205</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>806</x>
+     <y>237</y>
+    </hint>
+   </hints>
+  </connection>
  </connections>
  <slots>
   <slot>UDP_connect()</slot>
   <slot>UDP_disconnect()</slot>
+  <slot>ReadFile()</slot>
+  <slot>ShowNextFrame()</slot>
+  <slot>CloseFile()</slot>
  </slots>
 </ui>

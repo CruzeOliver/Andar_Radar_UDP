@@ -34,9 +34,21 @@ class Ui_MainWindow(object):
         self.pushButton_Disconnect = QtWidgets.QPushButton(self.groupBox_2)
         self.pushButton_Disconnect.setObjectName("pushButton_Disconnect")
         self.verticalLayout.addWidget(self.pushButton_Disconnect)
-        self.verticalLayout_3 = QtWidgets.QVBoxLayout()
-        self.verticalLayout_3.setObjectName("verticalLayout_3")
-        self.verticalLayout.addLayout(self.verticalLayout_3)
+        self.checkBox_IsSave = QtWidgets.QCheckBox(self.groupBox_2)
+        self.checkBox_IsSave.setLayoutDirection(QtCore.Qt.RightToLeft)
+        self.checkBox_IsSave.setObjectName("checkBox_IsSave")
+        self.verticalLayout.addWidget(self.checkBox_IsSave)
+        self.pushButton_ReadFile = QtWidgets.QPushButton(self.groupBox_2)
+        self.pushButton_ReadFile.setObjectName("pushButton_ReadFile")
+        self.verticalLayout.addWidget(self.pushButton_ReadFile)
+        self.pushButton_Next = QtWidgets.QPushButton(self.groupBox_2)
+        self.pushButton_Next.setObjectName("pushButton_Next")
+        self.verticalLayout.addWidget(self.pushButton_Next)
+        self.pushButton_CloseFile = QtWidgets.QPushButton(self.groupBox_2)
+        self.pushButton_CloseFile.setObjectName("pushButton_CloseFile")
+        self.verticalLayout.addWidget(self.pushButton_CloseFile)
+        spacerItem = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        self.verticalLayout.addItem(spacerItem)
         self.gridLayout.addWidget(self.groupBox_2, 0, 2, 1, 1)
         self.groupBox_3 = QtWidgets.QGroupBox(self.centralwidget)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
@@ -142,6 +154,9 @@ class Ui_MainWindow(object):
         self.tabWidget.setCurrentIndex(0)
         self.pushButton_Connect.clicked.connect(MainWindow.UDP_connect) # type: ignore
         self.pushButton_Disconnect.clicked.connect(MainWindow.UDP_disconnect) # type: ignore
+        self.pushButton_ReadFile.clicked.connect(MainWindow.ReadFile) # type: ignore
+        self.pushButton_Next.clicked.connect(MainWindow.ShowNextFrame) # type: ignore
+        self.pushButton_CloseFile.clicked.connect(MainWindow.CloseFile) # type: ignore
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
@@ -150,6 +165,10 @@ class Ui_MainWindow(object):
         self.groupBox_2.setTitle(_translate("MainWindow", "UDP_config"))
         self.pushButton_Connect.setText(_translate("MainWindow", "Connect"))
         self.pushButton_Disconnect.setText(_translate("MainWindow", "Disconnect"))
+        self.checkBox_IsSave.setText(_translate("MainWindow", "Is Save Mat"))
+        self.pushButton_ReadFile.setText(_translate("MainWindow", "ReadFile"))
+        self.pushButton_Next.setText(_translate("MainWindow", "Next"))
+        self.pushButton_CloseFile.setText(_translate("MainWindow", "CloseFile"))
         self.groupBox_3.setTitle(_translate("MainWindow", "Message"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab), _translate("MainWindow", "ADC-T2R2"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_2), _translate("MainWindow", "ADC"))
