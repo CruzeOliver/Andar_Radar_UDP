@@ -180,9 +180,8 @@ class UdpRxThread(threading.Thread):
             except OSError:
                 break
 
-            # 如需严格来源过滤，打开这两行：
-            # if sip != PEER_IP:
-            #     continue
+            if sip != PEER_IP:
+                continue
 
             res = self._asm.process(data)
             if res is not None:
@@ -230,7 +229,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
 
         # 初始化 Matplotlib 图形
         for key, layout in self.layout_dict.items():
-            fig, ax = plt.subplots(figsize=(4, 3))
+            fig, ax = plt.subplots(figsize=(0, 0))
             canvas = FigureCanvas(fig)
             layout.addWidget(canvas)
             self.canvas_dict[key] = canvas
@@ -272,7 +271,6 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             except Exception: pass
             self.tx_sock = None
         self.bus.log.emit("[OK] 已断开")
-
 
     def reorder_frame(self, frame_bytes: bytes, sample: int, chirp: int, window: np.ndarray | None = None):
         n_ant = 4
