@@ -2,15 +2,19 @@ from UI.Ui_Radar_UDP import Ui_MainWindow
 import sys, socket, threading, struct
 from dataclasses import dataclass
 from PyQt5.QtCore import QObject, pyqtSignal
-from PyQt5.QtWidgets import QApplication, QMainWindow
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout
 import numpy as np
 import pyqtgraph as pg
-# ================== 协议/网络参数（按需改） ==================
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+import matplotlib.pyplot as plt
+from plot_utils import init_ADC4_plot
+
+# ================== 协议/网络参数 ==================
 LISTEN_IP   = "0.0.0.0"        # 监听所有网卡
 LISTEN_PORT = 8888             # 本地接收端口
-PEER_IP     = "192.168.1.55"   # 雷达设备IP（可用于来源过滤；默认不强制）
+PEER_IP     = "192.168.1.55"   # 雷达设备IP
 PEER_PORT   = 6666             # 若需主动发送，发往的端口
-PKT_SIZE    = 1024             # 每个UDP包固定 1024B（与C++一致）
+PKT_SIZE    = 1024             # 每个UDP包固定 1024B
 MAGIC       = b"\x44\x33\x22\x11"  # 魔数头
 
 # ================== 合理范围/安全上限 ==================
@@ -129,19 +133,17 @@ class DataAssembler:
             self.bus.log.emit("[CFG] 解析异常（长度不足）")
             return None
 
-        # 合理范围校验（根据设备实际调整）
+        # 合理范围校验
         if not (1 <= sample_point <= MAX_SAMPLES and 1 <= chirp_num <= MAX_CHIRPS):
             self.bus.log.emit(f"[CFG] 越界: sample={sample_point} chirp={chirp_num}")
             return None
 
-        # TxRxType 非法就兜底为 1（或你也可以直接丢弃）
+        # TxRxType 非法就兜底为 1
         if txrx not in (1, 4):
             self.bus.log.emit(f"[CFG] txrx={txrx} 非法，按 1 处理")
             txrx = 1
 
         return (sample_point, chirp_num, txrx)
-
-
 
     def _reset_to_wait_cfg(self):
         self.s.awaiting_cfg = True
@@ -211,15 +213,36 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.setupUi(self)
         self.setWindowTitle("Radar UDP Interface")
 
+        self.rx_thread = None
+        self.tx_sock   = None
+
+        # 存放绘图 canvas 和 axes 对象
+        self.canvas_dict = {}
+        self.ax_dict = {}
+
+        # 定义布局，将每个 widget 与 matplotlib 图形关联
+        self.layout_dict = {
+            'tx0rx0': QVBoxLayout(self.widget_tx0rx0),
+            'tx0rx1': QVBoxLayout(self.widget_tx0rx1),
+            'tx1rx0': QVBoxLayout(self.widget_tx1rx0),
+            'tx1rx1': QVBoxLayout(self.widget_tx1rx1)
+        }
+
+        # 初始化 Matplotlib 图形
+        for key, layout in self.layout_dict.items():
+            fig, ax = plt.subplots(figsize=(4, 3))
+            canvas = FigureCanvas(fig)
+            layout.addWidget(canvas)
+            self.canvas_dict[key] = canvas
+            self.ax_dict[key] = ax
+            init_ADC4_plot(ax)
+
         self.bus = Bus()
         self.bus.log.connect(self._log)
         self.bus.frame_ready.connect(self.on_frame_ready)
 
-        self.rx_thread = None
-        self.tx_sock   = None
-
     def _log(self, s: str):
-        # 轻量日志：只显示关键状态；避免逐包刷屏
+        # 重定向日志到 textEdit_log
         try:
             self.textEdit_log.append(s)
         except Exception:
@@ -257,7 +280,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         if len(frame_bytes) != expected_bytes:
             raise ValueError(f"帧大小不匹配: got {len(frame_bytes)}, expect {expected_bytes}")
 
-        # 读取为 int16，并按你的 C++ 逻辑做 右移4位（除以16）
+        # 读取为 int16，右移4位（除以16）
         arr_iq = np.frombuffer(frame_bytes, dtype=np.int16).astype(np.float32) / 16.0  # I,Q 交替
         arr_iq = arr_iq.reshape(chirp, n_ant, sample, 2)  # (chirp, ant, sample, IQ)
 
@@ -276,23 +299,35 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             iq = iq * window[np.newaxis, np.newaxis, :]
 
         return iq
+
+
     # ---- 整帧到达回调：在这里做解析/计算/存档/绘图 ----
     def on_frame_ready(self, frame: bytes, sample: int, chirp: int, txrx: int):
+        """
+        接收到一帧数据后，绘制 I/Q 波形
+        """
         if txrx == 4:
             iq = self.reorder_frame(frame, sample, chirp)  # (4, chirp, sample)
 
+        # 获取时域 I/Q 波形
         t = np.arange(sample)
-        for ant_idx, widget in enumerate([
-            self.widget_tx0rx0,
-            self.widget_tx0rx1,
-            self.widget_tx1rx0,
-            self.widget_tx1rx1
-        ]):
+
+        for ant_idx, (key, ax) in enumerate(self.ax_dict.items()):
             I = np.real(iq[ant_idx, 0, :])  # 实部
             Q = np.imag(iq[ant_idx, 0, :])  # 虚部
-            widget.clear()
-            widget.plot(t, I, pen='r')  # 红色画I
-            widget.plot(t, Q, pen='b')  # 蓝色画Q
+
+            ax.clear()  # 清除之前的图像
+
+            # 绘制 I 和 Q 波形
+            ax.plot(t, I, label='I', color='r')  # 红色绘制 I
+            ax.plot(t, Q, label='Q', color='b')  # 蓝色绘制 Q
+
+            # 重新绘制坐标轴和标题
+            self.init_plot(ax)
+
+            # 更新图形
+            ax.legend(loc='best')
+            self.canvas_dict[key].draw()  # 更新画布
 
     def closeEvent(self, e):
         self.UDP_disconnect()
