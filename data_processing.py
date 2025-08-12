@@ -12,7 +12,8 @@ CHIRP_T1 = 14  # 微秒
 CHIRP_T2 = 0   # 微秒
 CHIRP_PERIOD = CHIRP_T0 + CHIRP_T1 + CHIRP_T2  # Chirp周期，单位微秒
 
-def reorder_frame(frame_bytes: bytes, sample: int, chirp: int, window: np.ndarray | None = None):
+
+def reorder_frame(frame_bytes: bytes, chirp: int, sample: int,  window: np.ndarray | None = None):
     n_ant = 4
     #expected_bytes = chirp * n_ant * sample * 2 * 2  # chirp * 天线 * 样点 * (IQ) * int16
     #if len(frame_bytes) != expected_bytes:
@@ -39,25 +40,25 @@ def reorder_frame(frame_bytes: bytes, sample: int, chirp: int, window: np.ndarra
     return iq
 
 
-def calculate_distance_from_fft(adc_data, n_chirp, n_points):
+def calculate_distance_from_fft(fft_result, n_chirp, n_points):
     """
     使用多种方法从ADC数据中计算距离。
     处理逻辑为：选择第0个虚拟天线的所有Chirp数据，进行平均后做FFT。
     然后使用Macleod和Chirp-Z插值进行峰值细化。
     """
     # 步骤 1: 重排帧数据并选择第0个虚拟天线的数据
-    iq = reorder_frame(adc_data, n_points, n_chirp)
+    #iq = reorder_frame(adc_data, n_points, n_chirp)
 
     # iq的形状为 (4, n_chirp, n_points)
     # 选取第0个虚拟天线的数据，形状为 (n_chirp, n_points)
-    data_for_fft = iq[0, :, :]
+    # data_for_fft = iq[0, :, :]
 
-    # 对所有chirp的数据进行平均（或求和），以提高信噪比
-    # 结果 x_complex 形状为 (n_points,)，是一个一维数组
-    x_complex = np.mean(data_for_fft, axis=0)
+    # # 对所有chirp的数据进行平均（或求和），以提高信噪比
+    # # 结果 x_complex 形状为 (n_points,)，是一个一维数组
+    # x_complex = np.mean(data_for_fft, axis=0)
 
-    # 步骤 2: 对数据进行FFT
-    fft_result = np.fft.fft(x_complex)
+    # # 步骤 2: 对数据进行FFT
+    # fft_result = np.fft.fft(x_complex)
 
     # 步骤 3: 计算幅度谱并找到FFT峰值
     fft_sum = np.abs(fft_result)

@@ -93,27 +93,36 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         # 存放绘图 canvas 和 axes 对象
         self.canvas_dict = {}
         self.ax_dict = {}
+        self.setup_mpl_widgets()
 
+
+        self.bus = Bus()
+        self.bus.log.connect(self._log)
+        self.bus.frame_ready.connect(self.on_frame_ready)
+
+    def setup_mpl_widgets(self):
+        """
+        创建 Matplotlib 图形并将其关联到指定的 Qt widgets。
+        """
         # 定义布局，将每个 widget 与 matplotlib 图形关联
         self.layout_dict = {
             'tx0rx0': QVBoxLayout(self.widget_tx0rx0),
             'tx0rx1': QVBoxLayout(self.widget_tx0rx1),
             'tx1rx0': QVBoxLayout(self.widget_tx1rx0),
-            'tx1rx1': QVBoxLayout(self.widget_tx1rx1)
+            'tx1rx1': QVBoxLayout(self.widget_tx1rx1),
+            '1DFFT': QVBoxLayout(self.widget_1DFFT)
         }
-
-        # 将Mathplotlib 图形与widgets关联
         for key, layout in self.layout_dict.items():
             fig, ax = plt.subplots(figsize=(0, 0))
             canvas = FigureCanvas(fig)
             layout.addWidget(canvas)
             self.canvas_dict[key] = canvas
             self.ax_dict[key] = ax
-            init_ADC4_plot(ax)
+            if key == '1DFFT':
+                init_1DFFT_plot(ax)
+            else:
+                init_ADC4_plot(ax)
 
-        self.bus = Bus()
-        self.bus.log.connect(self._log)
-        self.bus.frame_ready.connect(self.on_frame_ready)
 
     def _log(self, s: str):
         # 重定向日志到 textEdit_log
@@ -162,22 +171,26 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
                 self.bus.log.emit("[ERR] 保存原始数据失败")
 
         current_time = time.time()
+        iq = reorder_frame(frame, chirp, sample)
         # 判断是否满足显示间隔
         if current_time - self.last_display_time > self.display_interval:
-            self.DisplayADC4Waveform(frame, sample, chirp, txrx)
+            self.DisplayADC4Waveform(iq, chirp, sample)
             self.last_display_time = current_time
         else:
             pass
+        self.fft_result = self.Display1DFFT(iq, chirp, sample)
+        R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft(self.fft_result, chirp, sample)
+        self.bus.log.emit(f"距离计算结果：FFT={R_fft:.2f} m, Macleod={R_macleod:.2f} m, CZT FFT Peak={R_czt_fftpeak:.2f} m, CZT Macleod={R_czt_macleod:.2f} m")
 
-    def DisplayADC4Waveform(self, frame: bytes, sample: int, chirp: int, txrx: int):
+# ================== Plot图像部分内容 ==================
+
+    def DisplayADC4Waveform(self, iq, chirp: int, sample: int):
         """
         接收到一帧数据后，显示 ADC4 波形
         """
-        if txrx == 4:
-            iq = reorder_frame(frame, sample, chirp)
         # 绘制时域 I/Q 波形
         t = np.arange(sample)
-        for ant_idx, (key, ax) in enumerate(self.ax_dict.items()):
+        for ant_idx, (key, ax) in enumerate(list(self.ax_dict.items())[:4]):
             I = np.real(iq[ant_idx, 0, :])  # 实部
             Q = np.imag(iq[ant_idx, 0, :])  # 虚部
             ax.clear()  # 清除之前的图像
@@ -192,6 +205,31 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             ax.grid(True)
             self.canvas_dict[key].draw()  # 更新画布
 
+    def Display1DFFT(self, iq, sample: int, chirp: int):
+
+         # 选取第0个虚拟天线的数据，形状为 (n_chirp, n_points)
+        data_for_fft = iq[0, :, :]
+
+        # 对所有chirp的数据进行平均（或求和），以提高信噪比
+        # 结果 x_complex 形状为 (n_points,)，是一个一维数组
+        x_complex = np.mean(data_for_fft, axis=0)
+        fft_result = np.fft.fft(x_complex)
+
+        # --- 绘制 FFT 结果到最后一个 FFT_ax ---
+        last_key = list(self.ax_dict.keys())[-1]
+
+        FFT_ax = self.ax_dict[last_key]
+        FFT_canvas = self.canvas_dict[last_key]
+
+        FFT_ax.clear()
+        FFT_ax.plot(np.abs(fft_result))
+        FFT_ax.grid(True)  # 显示网格
+
+        FFT_ax.set_title("1DFFT result")
+        FFT_ax.set_xlabel("FFT Bin")
+        FFT_ax.set_ylabel("Amplitude")
+        FFT_canvas.draw()
+        return fft_result
 
 # ================== 文件读取部分内容 ==================
     def save_to_mat(self,frame_data, sample_number, chirp_number, filename="raw_data.mat"):
@@ -283,18 +321,21 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         #print(f"显示当前帧数据：{frame_data}")
         #print(f"帧数据形状：{frame_data.shape}")
         self.bus.log.emit(f"{self.frame_data_list[self.current_index]} 数据已加载")
-        selected_index = self.comboBox_MatFrom.currentIndex
-        if selected_index == 0:  # C++ 数据
+        selected_label = self.comboBox_MatFrom.currentText()
+        if selected_label == "CPP":  # C++ 数据
             frame_data = frame_data.T  # 转置数据，确保行优先
             sample = frame_data.shape[0] / 8  # 4 虚拟天线，每个天线 2 个通道（I/Q）
             chirp = frame_data.shape[1]
             frame_data_flat = frame_data.flatten()
-        elif selected_index == 1:  # Python 数据
+        elif selected_label == "Python":  # Python 数据
             sample = frame_data.shape[1] / 8  # 4 虚拟天线，每个天线 2 个通道（I/Q）
             chirp = frame_data.shape[0]
             frame_data_flat = frame_data.flatten()
-        self.DisplayADC4Waveform(frame_data_flat, int(sample), int(chirp), 4)
-        calculate_distance_from_fft(frame_data_flat, int(chirp), int(sample))
+        iq = reorder_frame(frame_data_flat, int(sample), int(chirp))
+        self.DisplayADC4Waveform(iq, int(chirp), int(sample))
+        self.Display1DFFT(iq, chirp, sample)
+        R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft(iq, int(chirp), int(sample))
+        self.bus.log.emit(f"距离计算结果：FFT={R_fft:.2f} m, Macleod={R_macleod:.2f} m, CZT FFT Peak={R_czt_fftpeak:.2f} m, CZT Macleod={R_czt_macleod:.2f} m")
 
     def ShowNextFrame(self):
         if self.current_index < len(self.frame_data_list) - 1:

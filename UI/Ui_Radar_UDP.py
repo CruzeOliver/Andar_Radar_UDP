@@ -93,9 +93,9 @@ class Ui_MainWindow(object):
         self.tab_3.setObjectName("tab_3")
         self.horizontalLayout_3 = QtWidgets.QHBoxLayout(self.tab_3)
         self.horizontalLayout_3.setObjectName("horizontalLayout_3")
-        self.widget = QtWidgets.QWidget(self.tab_3)
-        self.widget.setObjectName("widget")
-        self.horizontalLayout_3.addWidget(self.widget)
+        self.widget_1DFFT = QtWidgets.QWidget(self.tab_3)
+        self.widget_1DFFT.setObjectName("widget_1DFFT")
+        self.horizontalLayout_3.addWidget(self.widget_1DFFT)
         self.tabWidget_1DFFT.addTab(self.tab_3, "")
         self.gridLayout.addWidget(self.tabWidget_1DFFT, 0, 0, 1, 1)
         self.line = QtWidgets.QFrame(self.centralwidget)
@@ -175,7 +175,7 @@ class Ui_MainWindow(object):
         MainWindow.setStatusBar(self.statusbar)
 
         self.retranslateUi(MainWindow)
-        self.tabWidget_1DFFT.setCurrentIndex(0)
+        self.tabWidget_1DFFT.setCurrentIndex(2)
         self.pushButton_Connect.clicked.connect(MainWindow.UDP_connect) # type: ignore
         self.pushButton_Disconnect.clicked.connect(MainWindow.UDP_disconnect) # type: ignore
         self.pushButton_ReadFile.clicked.connect(MainWindow.ReadFile) # type: ignore

@@ -1,5 +1,3 @@
-# udp_handler.py
-
 from dataclasses import dataclass
 import struct
 from Andar_udp import Bus

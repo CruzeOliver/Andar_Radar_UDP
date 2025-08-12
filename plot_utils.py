@@ -11,3 +11,15 @@ def init_ADC4_plot(ax):
     ax.grid(True)  # 显示网格
     ax.set_xlim(-100, 100)  # 设置 X 轴范围，适应数据范围
     ax.set_ylim(-100, 100)  # 设置 Y 轴范围，适应数据范围
+
+def init_1DFFT_plot(ax):
+    """
+    初始化 1D FFT 图形的样式
+    """
+    ax.set_facecolor('white')  # 设置背景色为白色
+    ax.set_xlabel('FFT Bin', fontsize=10)  # 设置 X 轴标签和字体大小
+    ax.set_ylabel('Amplitude', fontsize=10)  # 设置 Y 轴标签和字体大小
+    ax.set_title('1D FFT Result', fontsize=10)  # 设置标题字体大小
+    ax.grid(True)  # 显示网格
+    ax.set_xlim(0, 256)  # 设置 X 轴范围，适应数据范围
+    ax.set_ylim(0, 1000)  # 设置 Y 轴范围，适应数据范围
