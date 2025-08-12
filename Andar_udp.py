@@ -84,6 +84,8 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.comboBox_MatFrom.addItems(options)
         self.comboBox_MatFrom.currentIndex = 0  # 默认选择第一个选项
 
+        self.fft_result_1D = None
+        self.fft_result_2D = None
         self.rx_thread = None
         self.tx_sock   = None
 
@@ -172,14 +174,15 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
 
         current_time = time.time()
         iq = reorder_frame(frame, chirp, sample)
+        self.fft_result_1D = Perform1D_FFT(iq)
         # 判断是否满足显示间隔
         if current_time - self.last_display_time > self.display_interval:
             self.DisplayADC4Waveform(iq, chirp, sample)
+            self.Display1DFFT(self.fft_result_1D)
             self.last_display_time = current_time
         else:
             pass
-        self.fft_result = self.Display1DFFT(iq, chirp, sample)
-        R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft(self.fft_result, chirp, sample)
+        R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft(self.fft_result_1D, chirp, sample)
         self.bus.log.emit(f"距离计算结果：FFT={R_fft:.2f} m, Macleod={R_macleod:.2f} m, CZT FFT Peak={R_czt_fftpeak:.2f} m, CZT Macleod={R_czt_macleod:.2f} m")
 
 # ================== Plot图像部分内容 ==================
@@ -205,15 +208,9 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             ax.grid(True)
             self.canvas_dict[key].draw()  # 更新画布
 
-    def Display1DFFT(self, iq, sample: int, chirp: int):
+    def Display1DFFT(self, fft_result_in):
 
-         # 选取第0个虚拟天线的数据，形状为 (n_chirp, n_points)
-        data_for_fft = iq[0, :, :]
-
-        # 对所有chirp的数据进行平均（或求和），以提高信噪比
-        # 结果 x_complex 形状为 (n_points,)，是一个一维数组
-        x_complex = np.mean(data_for_fft, axis=0)
-        fft_result = np.fft.fft(x_complex)
+        fft_result = fft_result_in
 
         # --- 绘制 FFT 结果到最后一个 FFT_ax ---
         last_key = list(self.ax_dict.keys())[-1]
@@ -229,7 +226,6 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         FFT_ax.set_xlabel("FFT Bin")
         FFT_ax.set_ylabel("Amplitude")
         FFT_canvas.draw()
-        return fft_result
 
 # ================== 文件读取部分内容 ==================
     def save_to_mat(self,frame_data, sample_number, chirp_number, filename="raw_data.mat"):
@@ -324,17 +320,18 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         selected_label = self.comboBox_MatFrom.currentText()
         if selected_label == "CPP":  # C++ 数据
             frame_data = frame_data.T  # 转置数据，确保行优先
-            sample = frame_data.shape[0] / 8  # 4 虚拟天线，每个天线 2 个通道（I/Q）
+            sample = frame_data.shape[0] // 8  # 4 虚拟天线，每个天线 2 个通道（I/Q）
             chirp = frame_data.shape[1]
             frame_data_flat = frame_data.flatten()
         elif selected_label == "Python":  # Python 数据
-            sample = frame_data.shape[1] / 8  # 4 虚拟天线，每个天线 2 个通道（I/Q）
+            sample = frame_data.shape[1] // 8  # 4 虚拟天线，每个天线 2 个通道（I/Q）
             chirp = frame_data.shape[0]
             frame_data_flat = frame_data.flatten()
-        iq = reorder_frame(frame_data_flat, int(sample), int(chirp))
+        iq = reorder_frame(frame_data_flat, int(chirp), int(sample))
         self.DisplayADC4Waveform(iq, int(chirp), int(sample))
-        self.Display1DFFT(iq, chirp, sample)
-        R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft(iq, int(chirp), int(sample))
+        self.fft_result_1D = Perform1D_FFT(iq)
+        self.Display1DFFT(self.fft_result_1D)
+        R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft(self.fft_result_1D, chirp, sample)
         self.bus.log.emit(f"距离计算结果：FFT={R_fft:.2f} m, Macleod={R_macleod:.2f} m, CZT FFT Peak={R_czt_fftpeak:.2f} m, CZT Macleod={R_czt_macleod:.2f} m")
 
     def ShowNextFrame(self):

@@ -38,33 +38,31 @@ def reorder_frame(frame_bytes: bytes, chirp: int, sample: int,  window: np.ndarr
         iq = iq * window[np.newaxis, np.newaxis, :]
 
     return iq
+def Perform1D_FFT(iq):
+    # iq的形状为 (4, n_chirp, n_points)
+    # 选取第0个虚拟天线的数据，形状为 (n_chirp, n_points)
+    data_for_fft = iq[0, :, :]
 
+    # 对所有chirp的数据进行平均（或求和），以提高信噪比
+    # 结果 x_complex 形状为 (n_points,)，是一个一维数组
+    x_complex = np.mean(data_for_fft, axis=0)
 
-def calculate_distance_from_fft(fft_result, n_chirp, n_points):
+    # 步骤 2: 对数据进行FFT
+    fft_result = np.fft.fft(x_complex)
+    return fft_result
+
+def calculate_distance_from_fft(fft_result_in, n_chirp, n_points):
     """
     使用多种方法从ADC数据中计算距离。
     处理逻辑为：选择第0个虚拟天线的所有Chirp数据，进行平均后做FFT。
     然后使用Macleod和Chirp-Z插值进行峰值细化。
     """
-    # 步骤 1: 重排帧数据并选择第0个虚拟天线的数据
-    #iq = reorder_frame(adc_data, n_points, n_chirp)
-
-    # iq的形状为 (4, n_chirp, n_points)
-    # 选取第0个虚拟天线的数据，形状为 (n_chirp, n_points)
-    # data_for_fft = iq[0, :, :]
-
-    # # 对所有chirp的数据进行平均（或求和），以提高信噪比
-    # # 结果 x_complex 形状为 (n_points,)，是一个一维数组
-    # x_complex = np.mean(data_for_fft, axis=0)
-
-    # # 步骤 2: 对数据进行FFT
-    # fft_result = np.fft.fft(x_complex)
-
     # 步骤 3: 计算幅度谱并找到FFT峰值
+    fft_result = fft_result_in
     fft_sum = np.abs(fft_result)
     valid_points = n_points // 2
     max_index = np.argmax(fft_sum[:valid_points])
-
+    max_index = int(max_index)
     # 计算频率偏移
     f_fft_peak = max_index * ADC_SAMPLE_RATE * 1e6 / n_points
 
