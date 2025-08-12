@@ -189,6 +189,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             ax.grid(True)
             self.canvas_dict[key].draw()  # 更新画布
 
+
 # ================== 文件读取部分内容 ==================
     def save_to_mat(self,frame_data, sample_number, chirp_number, filename="raw_data.mat"):
         try:
@@ -255,12 +256,10 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         读取 MAT 文件中的数据
         """
         try:
-            # 读取 .mat 文件
-            data = scipy.io.loadmat(filename)
+            data = scipy.io.loadmat(filename) # 读取 .mat 文件
             self.frame_all_data = data
 
-            # 打印文件中包含的变量
-            self.bus.log.emit(f"读取文件：{filename}")
+            self.bus.log.emit(f"读取文件：{filename}")# 打印文件中包含的变量
             #print(f"文件中包含的变量：{list(data.keys())}")
 
             # 获取所有包含帧数据的变量（以 "frame" 开头的变量名）
@@ -281,26 +280,10 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         #print(f"显示当前帧数据：{frame_data}")
         #print(f"帧数据形状：{frame_data.shape}")
         self.bus.log.emit(f"{self.frame_data_list[self.current_index]} 数据已加载")
-        sample = frame_data.shape[1] /8  # 4 虚拟天线，每个天线 2 个通道（I/Q）
+        sample = frame_data.shape[1] / 8  # 4 虚拟天线，每个天线 2 个通道（I/Q）
         chirp = frame_data.shape[0]
         frame_data_flat = frame_data.flatten()
-        iq = reorder_frame(frame_data_flat, int(sample), int(chirp))  # (4, chirp, sample)
-        # 绘制时域 I/Q 波形
-        t = np.arange(sample)
-        for ant_idx, (key, ax) in enumerate(self.ax_dict.items()):
-            I = np.real(iq[ant_idx, 0, :])  # 实部
-            Q = np.imag(iq[ant_idx, 0, :])  # 虚部
-            ax.clear()  # 清除之前的图像
-
-            # 绘制 I 和 Q 波形
-            ax.plot(t, I, label='I', color='r')  # 红色绘制 I
-            ax.plot(t, Q, label='Q', color='b')  # 蓝色绘制 Q
-            #init_ADC4_plot(ax)
-
-            # 更新图形
-            ax.grid(True)  # 显示网格
-            ax.legend(loc='best')
-            self.canvas_dict[key].draw()  # 更新画布
+        self.DisplayADC4Waveform(frame_data_flat, int(sample), int(chirp), 4)
 
     def ShowNextFrame(self):
         if self.current_index < len(self.frame_data_list) - 1:
@@ -323,7 +306,6 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.UDP_disconnect()
         super().closeEvent(e)
 
-# ================== 入口 ==================
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     win = MyMainForm()
