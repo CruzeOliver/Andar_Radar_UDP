@@ -1,5 +1,5 @@
 from UI.Ui_Radar_UDP import Ui_MainWindow
-import sys, socket, threading, struct
+import sys, socket, threading
 from dataclasses import dataclass
 from PyQt5.QtCore import QObject, pyqtSignal
 import time
@@ -11,148 +11,13 @@ import matplotlib.pyplot as plt
 from plot_utils import *
 from data_processing import *
 import scipy.io
-
-# ================== 协议/网络参数 ==================
-LISTEN_IP   = "0.0.0.0"        # 监听所有网卡
-LISTEN_PORT = 8888             # 本地接收端口
-PEER_IP     = "192.168.1.55"   # 雷达设备IP
-PEER_PORT   = 6666             # 若需主动发送，发往的端口
-PKT_SIZE    = 1024             # 每个UDP包固定 1024B
-MAGIC       = b"\x44\x33\x22\x11"  # 魔数头
-
-# ================== 合理范围/安全上限 ==================
-MAX_SAMPLES = 8192
-MAX_CHIRPS  = 8192
-MAX_FRAME_BYTES = 64 * 1024 * 1024
+from udp_handler import *
 
 # ================== Qt 信号总线 ==================
 class Bus(QObject):
     log         = pyqtSignal(str)     # log日志重定向
     frame_ready = pyqtSignal(bytes, int, int, int)# frame, sample_point, chirp_num, txrx
 
-# ================== 帧装配状态机 ==================
-def _valid_cfg(sample_point: int, chirp_num: int) -> bool:
-    return 1 <= sample_point <= MAX_SAMPLES and 1 <= chirp_num <= MAX_CHIRPS
-
-class AsmState:
-    # 状态
-    awaiting_cfg: bool = True   # True=等待配置包；False=收集数据包
-    # 配置
-    sample_number: int = 0
-    chirp_number:  int = 0
-    tx_rx_type:    int = 1      # 缺省按1处理
-    # 拼帧
-    total_pkts:    int = 0
-    frame_buf:     bytearray = bytearray()
-    pkg_cnt:       int = 0
-
-class DataAssembler:
-    """
-    状态机：
-      awaiting_cfg=True  时，只接受配置包（magic 开头），解析 sample/chirp(/txrx) 并计算帧大小、分包数；
-      awaiting_cfg=False 时，连续收 1024B 数据包，攒满一帧后返回 bytes，并回到 awaiting_cfg=True。
-    """
-    def __init__(self, bus: Bus):
-        self.bus = bus
-        self.s   = AsmState()
-
-    def process(self, datagram: bytes) -> bytes | None:
-        """输入一个 1024B 数据报；若完成一帧则返回 bytes，否则返回 None。"""
-        if len(datagram) != PKT_SIZE:
-            return None  #非 1024B 包忽略
-
-        if self.s.awaiting_cfg:
-            if not datagram.startswith(MAGIC):
-                # 等配置，非magic包一律忽略
-                return None
-            parsed = self._parse_config(datagram)
-            if not parsed:
-                # 解析失败或不在合理范围，继续等待下一个配置包
-                return None
-
-            sample_point, chirp_num, txrx = parsed
-            self.s.sample_number = sample_point
-            self.s.chirp_number  = chirp_num
-            self.s.tx_rx_type    = txrx
-
-            # 计算一帧字节数
-            if txrx == 4:
-                # 4 虚拟天线 * chirp * sample * (I/Q各int16=4字节)
-                total_bytes = 4 * chirp_num * sample_point * 2 *2
-            else:
-                # txrx==1 或默认：每样本4字节
-                total_bytes = chirp_num * sample_point * 2 *2
-
-            if total_bytes <= 0 or total_bytes > MAX_FRAME_BYTES:
-                self.bus.log.emit(f"[CFG] total_bytes={total_bytes} 超限，丢弃配置")
-                return None
-
-            try:
-                self.s.frame_buf = bytearray(total_bytes)
-            except MemoryError:
-                self.bus.log.emit(f"[CFG] 申请内存失败 total_bytes={total_bytes}")
-                return None
-
-            self.s.total_pkts = (total_bytes + PKT_SIZE - 1) // PKT_SIZE
-            self.s.pkg_cnt = 0
-            self.s.awaiting_cfg = False
-
-            # self.bus.log.emit(f"[CFG] sample={sample_point} chirp={chirp_num} txrx={txrx} "
-            #                   f"bytes={total_bytes} pkts={self.s.total_pkts}")
-            return None
-
-        else:
-            # 收集数据包
-            offset = self.s.pkg_cnt * PKT_SIZE
-            if offset >= len(self.s.frame_buf):
-                self.bus.log.emit("Error: Buffer overflow detected!")
-                self._reset_to_wait_cfg()
-                return None
-
-            n = min(PKT_SIZE, len(self.s.frame_buf) - offset)
-            self.s.frame_buf[offset:offset + n] = datagram[:n]
-            self.s.pkg_cnt += 1
-
-            if self.s.pkg_cnt >= self.s.total_pkts:
-                # 帧完成
-                frame = bytes(self.s.frame_buf)
-                self._reset_to_wait_cfg()
-                return (frame, self.s.sample_number, self.s.chirp_number, self.s.tx_rx_type)
-
-            return None
-
-    def _parse_config(self, buf: bytes):
-        """
-        固定布局（已从运行日志锁定）：
-        magic(0..3) = 44 33 22 11
-        [4..11]     = 8字节
-        [12..15]    = chirpNum (int32, LE)
-        [16..19]    = samplePoint    (int32, LE)
-        [20..23]    = TxRxType    (int32, LE)
-        """
-        try:
-            chirp_num,sample_point,  txrx = struct.unpack_from("<iii", buf, 12)
-        except struct.error:
-            self.bus.log.emit("[CFG] 解析异常（长度不足）")
-            return None
-
-        # 合理范围校验
-        if not (1 <= sample_point <= MAX_SAMPLES and 1 <= chirp_num <= MAX_CHIRPS):
-            self.bus.log.emit(f"[CFG] 越界: sample={sample_point} chirp={chirp_num}")
-            return None
-
-        # TxRxType 非法就兜底为 1
-        if txrx not in (1, 4):
-            self.bus.log.emit(f"[CFG] txrx={txrx} 非法，按 1 处理")
-            txrx = 1
-
-        return (sample_point, chirp_num, txrx)
-
-    def _reset_to_wait_cfg(self):
-        self.s.awaiting_cfg = True
-        self.s.total_pkts = 0
-        self.s.pkg_cnt = 0
-        self.s.frame_buf = bytearray()
 
 # ================== 接收线程（Python threading + socket） ==================
 class UdpRxThread(threading.Thread):
@@ -214,6 +79,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         super().__init__(parent)
         self.setupUi(self)
         self.setWindowTitle("Radar UDP Interface")
+        self.pushButton_Disconnect.setEnabled(False)
 
         self.rx_thread = None
         self.tx_sock   = None
@@ -258,10 +124,11 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.UDP_disconnect()  # 防止重复
         self.rx_thread = UdpRxThread(LISTEN_IP, LISTEN_PORT, self.bus)
         self.rx_thread.start()
-
         try:
             self.tx_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.bus.log.emit(f"[OK] 发送目标 {PEER_IP}:{PEER_PORT}")
+            self.pushButton_Connect.setEnabled(False)
+            self.pushButton_Disconnect.setEnabled(True)
         except Exception as e:
             self.bus.log.emit(f"[ERR] 创建发送 socket 失败: {e!r}")
             self.tx_sock = None
@@ -277,16 +144,17 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             except Exception: pass
             self.tx_sock = None
         self.bus.log.emit("[OK] 已断开")
+        self.pushButton_Connect.setEnabled(True)
+        self.pushButton_Disconnect.setEnabled(False)
 
-
-    # ---- 整帧到达回调：在这里做解析/计算/存档/绘图 ----
+    # ---- 整帧到达回调函数 ----
     def on_frame_ready(self, frame: bytes, sample: int, chirp: int, txrx: int):
         """
         数据格式正确,接收到一帧数据后回调函数
         """
          # 保存到 .mat 文件
         if self.checkBox_IsSave.isChecked():
-            if not save_to_mat(frame,sample,chirp,"raw_data.mat"):
+            if not self.save_to_mat(frame,sample,chirp,"raw_data.mat"):
                 #self.bus.log.emit("[OK] 原始数据已保存到 raw_data.mat")
                 self.bus.log.emit("[ERR] 保存原始数据失败")
 
@@ -321,8 +189,56 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             ax.grid(True)
             self.canvas_dict[key].draw()  # 更新画布
 
-
 # ================== 文件读取部分内容 ==================
+    def save_to_mat(self,frame_data, sample_number, chirp_number, filename="raw_data.mat"):
+        try:
+            # 获取当前时间戳，确保每一帧有唯一的变量名
+            timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S_%f")
+
+            # 计算预期的数据大小：4通道，I/Q每个16bit，每个数据点2字节
+            num_antennas = 4  # 4通道
+            num_iq = 2        # I/Q 每个16bit = 2字节
+            expected_size = sample_number * chirp_number * num_antennas * num_iq * np.dtype(np.int16).itemsize
+
+            # 检查数据的大小
+            if len(frame_data) != expected_size:
+                print(f"Error: Unexpected buffer size! Expected: {expected_size}, Actual: {len(frame_data)}")
+                return False
+
+            # 转换为 int16 数组
+            raw_iq = np.frombuffer(frame_data, dtype=np.int16)
+
+            # 假设每帧有 2048 个数据点，且每帧是 32 行，每行 2048 列
+            num_rows = 32
+            num_cols = 2048
+            total_frames = len(raw_iq) // (num_rows * num_cols)  # 计算帧数
+
+            # 检查帧数是否正确
+            #print(f"计算到帧数: {total_frames}, 预计每帧大小: {num_rows * num_cols} 字节")
+
+            # 将数据重塑为每帧 32x2048 的 2D 数组
+            reshaped_data = raw_iq[:total_frames * num_rows * num_cols].reshape((total_frames, num_rows, num_cols))
+
+            # 加载现有的 .mat 文件，如果文件不存在，则创建一个新文件
+            try:
+                existing_data = scipy.io.loadmat(filename)
+            except FileNotFoundError:
+                existing_data = {}
+
+            # 为当前帧生成唯一的变量名（时间戳 + 帧号）
+            frame_timestamp = f"frame_{timestamp}"
+
+            # 将当前帧的数据添加到现有数据字典中
+            existing_data[frame_timestamp] = reshaped_data[0]
+
+            # 使用 scipy 的 savemat 保存多个帧为独立的工作区（变量）
+            scipy.io.savemat(filename, existing_data)
+            #print(f"数据成功保存到 {filename}，包含 {len(existing_data)} 帧数据")
+
+            return True
+        except Exception as e:
+            print(f"保存数据时出错: {e}")
+            return False
 
     def ReadFile(self):
         """
@@ -364,6 +280,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         #frame_data = frame_data.T  # 转置数据，确保行优先
         #print(f"显示当前帧数据：{frame_data}")
         #print(f"帧数据形状：{frame_data.shape}")
+        self.bus.log.emit(f"{self.frame_data_list[self.current_index]} 数据已加载")
         sample = frame_data.shape[1] /8  # 4 虚拟天线，每个天线 2 个通道（I/Q）
         chirp = frame_data.shape[0]
         frame_data_flat = frame_data.flatten()
@@ -396,6 +313,11 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.frame_all_data = None
         self.frame_data_list = []  # 清空数据
         self.current_index = 0  # 重置索引
+        self.textEdit_log.clear()  # 清空日志
+        for key, ax in self.ax_dict.items():
+            ax.clear()
+            ax.figure.canvas.draw()  # 重新绘制图形
+        self.bus.log.emit("已关闭文件，清空数据")
 
     def closeEvent(self, e):
         self.UDP_disconnect()
