@@ -2,6 +2,7 @@ from UI.Ui_Radar_UDP import Ui_MainWindow
 import sys, socket, threading, struct
 from dataclasses import dataclass
 from PyQt5.QtCore import QObject, pyqtSignal
+import time
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QFileDialog, QMessageBox
 import numpy as np
 import pyqtgraph as pg
@@ -77,10 +78,10 @@ class DataAssembler:
             # 计算一帧字节数
             if txrx == 4:
                 # 4 虚拟天线 * chirp * sample * (I/Q各int16=4字节)
-                total_bytes = 4 * chirp_num * sample_point * 4
+                total_bytes = 4 * chirp_num * sample_point * 2 *2
             else:
                 # txrx==1 或默认：每样本4字节
-                total_bytes = chirp_num * sample_point * 4
+                total_bytes = chirp_num * sample_point * 2 *2
 
             if total_bytes <= 0 or total_bytes > MAX_FRAME_BYTES:
                 self.bus.log.emit(f"[CFG] total_bytes={total_bytes} 超限，丢弃配置")
@@ -96,8 +97,8 @@ class DataAssembler:
             self.s.pkg_cnt = 0
             self.s.awaiting_cfg = False
 
-            self.bus.log.emit(f"[CFG] sample={sample_point} chirp={chirp_num} txrx={txrx} "
-                              f"bytes={total_bytes} pkts={self.s.total_pkts}")
+            # self.bus.log.emit(f"[CFG] sample={sample_point} chirp={chirp_num} txrx={txrx} "
+            #                   f"bytes={total_bytes} pkts={self.s.total_pkts}")
             return None
 
         else:
@@ -125,12 +126,12 @@ class DataAssembler:
         固定布局（已从运行日志锁定）：
         magic(0..3) = 44 33 22 11
         [4..11]     = 8字节
-        [12..15]    = samplePoint (int32, LE)
-        [16..19]    = chirpNum    (int32, LE)
+        [12..15]    = chirpNum (int32, LE)
+        [16..19]    = samplePoint    (int32, LE)
         [20..23]    = TxRxType    (int32, LE)
         """
         try:
-            sample_point, chirp_num, txrx = struct.unpack_from("<iii", buf, 12)
+            chirp_num,sample_point,  txrx = struct.unpack_from("<iii", buf, 12)
         except struct.error:
             self.bus.log.emit("[CFG] 解析异常（长度不足）")
             return None
@@ -217,6 +218,9 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.rx_thread = None
         self.tx_sock   = None
 
+        self.last_display_time = time.time()# 记录最后显示的时间
+        self.display_interval = 0.5 # 1秒间隔
+
         # 存放绘图 canvas 和 axes 对象
         self.canvas_dict = {}
         self.ax_dict = {}
@@ -282,28 +286,44 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         """
          # 保存到 .mat 文件
         if self.checkBox_IsSave.isChecked():
-            if save_to_mat(frame,sample,chirp,"raw_data.mat"):
-                self.bus.log.emit("[OK] 原始数据已保存到 raw_data.mat")
-            else:
+            if not save_to_mat(frame,sample,chirp,"raw_data.mat"):
+                #self.bus.log.emit("[OK] 原始数据已保存到 raw_data.mat")
                 self.bus.log.emit("[ERR] 保存原始数据失败")
-        # 如果是2发2收信号，对数据进行重组，返回重组完成后的IQ数据
+
+        current_time = time.time()
+        # 判断是否满足显示间隔
+        if current_time - self.last_display_time > self.display_interval:
+            self.DisplayADC4Waveform(frame, sample, chirp, txrx)
+            self.last_display_time = current_time
+        else:
+            pass
+
+    def DisplayADC4Waveform(self, frame: bytes, sample: int, chirp: int, txrx: int):
+        """
+        接收到一帧数据后，显示 ADC4 波形
+        """
         if txrx == 4:
-            iq = reorder_frame(frame, sample, chirp)  # (4, chirp, sample)
-        # # 绘制时域 I/Q 波形
-        # t = np.arange(sample)
-        # for ant_idx, (key, ax) in enumerate(self.ax_dict.items()):
-        #     I = np.real(iq[ant_idx, 0, :])  # 实部
-        #     Q = np.imag(iq[ant_idx, 0, :])  # 虚部
-        #     ax.clear()  # 清除之前的图像
+            iq = reorder_frame(frame, sample, chirp)
+        # 绘制时域 I/Q 波形
+        t = np.arange(sample)
+        for ant_idx, (key, ax) in enumerate(self.ax_dict.items()):
+            I = np.real(iq[ant_idx, 0, :])  # 实部
+            Q = np.imag(iq[ant_idx, 0, :])  # 虚部
+            ax.clear()  # 清除之前的图像
 
-        #     # 绘制 I 和 Q 波形
-        #     ax.plot(t, I, label='I', color='r')  # 红色绘制 I
-        #     ax.plot(t, Q, label='Q', color='b')  # 蓝色绘制 Q
-        #     #init_ADC4_plot(ax)
+            # 绘制 I 和 Q 波形
+            ax.plot(t, I, label='I', color='r')  # 红色绘制 I
+            ax.plot(t, Q, label='Q', color='b')  # 蓝色绘制 Q
+            #init_ADC4_plot(ax)
 
-        #     # 更新图形
-        #     ax.legend(loc='best')
-        #     self.canvas_dict[key].draw()  # 更新画布
+            # 更新图形
+            ax.legend(loc='best')
+            ax.grid(True)
+            self.canvas_dict[key].draw()  # 更新画布
+
+
+# ================== 文件读取部分内容 ==================
+
     def ReadFile(self):
         """
         打开文件对话框，选择 .mat 文件并读取数据
@@ -321,18 +341,17 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         try:
             # 读取 .mat 文件
             data = scipy.io.loadmat(filename)
+            self.frame_all_data = data
 
             # 打印文件中包含的变量
-            print(f"读取文件：{filename}")
-            print(f"文件中包含的变量：{list(data.keys())}")
+            self.bus.log.emit(f"读取文件：{filename}")
+            #print(f"文件中包含的变量：{list(data.keys())}")
 
             # 获取所有包含帧数据的变量（以 "frame" 开头的变量名）
             self.frame_data_list = [key for key in data.keys() if key.startswith('frame')]
             self.current_index = 0  # 初始化为第一帧
             # 获取第一帧的数据
-            frame_data = data[self.frame_data_list[self.current_index]]
-            # 转置数据（列优先转行优先）
-            frame_data = frame_data.T  # 转置数据，确保行优先
+            frame_data = self.frame_all_data[self.frame_data_list[self.current_index]]
             self.show_matrix(frame_data)  # 显示第一帧
         except Exception as e:
             print(f"读取文件时出错: {e}")
@@ -342,21 +361,39 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         """
         显示当前帧的数据
         """
-        # res = self._asm.process(frame_data)
-        # if res is not None:
-        #     frame, sample, chirp, txrx = res
-        #     self.bus.frame_ready.emit(frame, sample, chirp, txrx)
+        #frame_data = frame_data.T  # 转置数据，确保行优先
+        #print(f"显示当前帧数据：{frame_data}")
+        #print(f"帧数据形状：{frame_data.shape}")
+        sample = frame_data.shape[1] /8  # 4 虚拟天线，每个天线 2 个通道（I/Q）
+        chirp = frame_data.shape[0]
+        frame_data_flat = frame_data.flatten()
+        iq = reorder_frame(frame_data_flat, int(sample), int(chirp))  # (4, chirp, sample)
+        # 绘制时域 I/Q 波形
+        t = np.arange(sample)
+        for ant_idx, (key, ax) in enumerate(self.ax_dict.items()):
+            I = np.real(iq[ant_idx, 0, :])  # 实部
+            Q = np.imag(iq[ant_idx, 0, :])  # 虚部
+            ax.clear()  # 清除之前的图像
 
-        print(f"显示当前帧数据：{frame_data}")
+            # 绘制 I 和 Q 波形
+            ax.plot(t, I, label='I', color='r')  # 红色绘制 I
+            ax.plot(t, Q, label='Q', color='b')  # 蓝色绘制 Q
+            #init_ADC4_plot(ax)
+
+            # 更新图形
+            ax.grid(True)  # 显示网格
+            ax.legend(loc='best')
+            self.canvas_dict[key].draw()  # 更新画布
 
     def ShowNextFrame(self):
         if self.current_index < len(self.frame_data_list) - 1:
             self.current_index += 1
-            self.show_matrix(self.frame_data_list[self.current_index])
+            self.show_matrix(self.frame_all_data[self.frame_data_list[self.current_index]])
         else:
             QMessageBox.information(self, "没有更多数据", "已到达文件末尾！")
 
     def CloseFile(self):
+        self.frame_all_data = None
         self.frame_data_list = []  # 清空数据
         self.current_index = 0  # 重置索引
 

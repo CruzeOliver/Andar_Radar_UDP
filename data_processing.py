@@ -2,9 +2,6 @@ import numpy as np
 import scipy.io
 from datetime import datetime
 
-
-
-
 def save_to_mat(frame_data, sample_number, chirp_number, filename="raw_data.mat"):
     try:
         # 获取当前时间戳，确保每一帧有唯一的变量名
@@ -29,7 +26,7 @@ def save_to_mat(frame_data, sample_number, chirp_number, filename="raw_data.mat"
         total_frames = len(raw_iq) // (num_rows * num_cols)  # 计算帧数
 
         # 检查帧数是否正确
-        print(f"计算到帧数: {total_frames}, 预计每帧大小: {num_rows * num_cols} 字节")
+        #print(f"计算到帧数: {total_frames}, 预计每帧大小: {num_rows * num_cols} 字节")
 
         # 将数据重塑为每帧 32x2048 的 2D 数组
         reshaped_data = raw_iq[:total_frames * num_rows * num_cols].reshape((total_frames, num_rows, num_cols))
@@ -48,7 +45,7 @@ def save_to_mat(frame_data, sample_number, chirp_number, filename="raw_data.mat"
 
         # 使用 scipy 的 savemat 保存多个帧为独立的工作区（变量）
         scipy.io.savemat(filename, existing_data)
-        print(f"数据成功保存到 {filename}，包含 {len(existing_data)} 帧数据")
+        #print(f"数据成功保存到 {filename}，包含 {len(existing_data)} 帧数据")
 
         return True
     except Exception as e:
@@ -58,8 +55,9 @@ def save_to_mat(frame_data, sample_number, chirp_number, filename="raw_data.mat"
 def reorder_frame(frame_bytes: bytes, sample: int, chirp: int, window: np.ndarray | None = None):
         n_ant = 4
         expected_bytes = chirp * n_ant * sample * 2 * 2  # chirp * 天线 * 样点 * (IQ) * int16
-        if len(frame_bytes) != expected_bytes:
-            raise ValueError(f"帧大小不匹配: got {len(frame_bytes)}, expect {expected_bytes}")
+
+        #if len(frame_bytes) != expected_bytes:
+            #raise ValueError(f"帧大小不匹配: got {len(frame_bytes)}, expect {expected_bytes}")
 
         # 读取为 int16，右移4位（除以16）
         arr_iq = np.frombuffer(frame_bytes, dtype=np.int16).astype(np.float32) / 16.0  # I,Q 交替
