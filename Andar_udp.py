@@ -80,6 +80,9 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.setupUi(self)
         self.setWindowTitle("Radar UDP Interface")
         self.pushButton_Disconnect.setEnabled(False)
+        options = ["CPP", "Python"]
+        self.comboBox_MatFrom.addItems(options)
+        self.comboBox_MatFrom.currentIndex = 0  # 默认选择第一个选项
 
         self.rx_thread = None
         self.tx_sock   = None
@@ -276,14 +279,22 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         """
         显示当前帧的数据
         """
-        #frame_data = frame_data.T  # 转置数据，确保行优先
+        #
         #print(f"显示当前帧数据：{frame_data}")
         #print(f"帧数据形状：{frame_data.shape}")
         self.bus.log.emit(f"{self.frame_data_list[self.current_index]} 数据已加载")
-        sample = frame_data.shape[1] / 8  # 4 虚拟天线，每个天线 2 个通道（I/Q）
-        chirp = frame_data.shape[0]
-        frame_data_flat = frame_data.flatten()
+        selected_index = self.comboBox_MatFrom.currentIndex
+        if selected_index == 0:  # C++ 数据
+            frame_data = frame_data.T  # 转置数据，确保行优先
+            sample = frame_data.shape[0] / 8  # 4 虚拟天线，每个天线 2 个通道（I/Q）
+            chirp = frame_data.shape[1]
+            frame_data_flat = frame_data.flatten()
+        elif selected_index == 1:  # Python 数据
+            sample = frame_data.shape[1] / 8  # 4 虚拟天线，每个天线 2 个通道（I/Q）
+            chirp = frame_data.shape[0]
+            frame_data_flat = frame_data.flatten()
         self.DisplayADC4Waveform(frame_data_flat, int(sample), int(chirp), 4)
+        calculate_distance_from_fft(frame_data_flat, int(chirp), int(sample))
 
     def ShowNextFrame(self):
         if self.current_index < len(self.frame_data_list) - 1:
