@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from PyQt5.QtCore import QObject, pyqtSignal
 import time
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QFileDialog, QMessageBox
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QIcon
 import numpy as np
 import pyqtgraph as pg
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -80,6 +80,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         super().__init__(parent)
         self.setupUi(self)
         self.setWindowTitle("Radar UDP Interface")
+
         self.pushButton_Disconnect.setEnabled(False)
         options = ["CPP", "Python"]
         self.comboBox_MatFrom.addItems(options)
@@ -87,6 +88,8 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
 
         self.fft_result_1D = None
         self.fft_result_2D = None
+        self.frame_all_data = None
+        self.frame_data_list = []
         self.rx_thread = None
         self.tx_sock   = None
 
@@ -98,7 +101,6 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.ax_dict = {}
         self.setup_mpl_widgets()
 
-
         self.bus = Bus()
         self.bus.log.connect(self._log)
         self.bus.frame_ready.connect(self.on_frame_ready)
@@ -107,12 +109,14 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         """
         创建 Matplotlib 图形并将其关联到指定的 Qt widgets。
         """
+        self.setWindowIcon(QIcon('Radar_UDP_icon2.png'))  # 设置窗口图标
         pixmap = QPixmap(r'CJLU_logo.png')
         if pixmap.isNull():
             QMessageBox.warning(self, "图像加载失败", "无法加载图像，请检查文件路径是否正确。")
         else:
             self.CJLU_logo_label.setPixmap(pixmap)
             self.CJLU_logo_label.setScaledContents(True)
+
         # 定义布局，将每个 widget 与 matplotlib 图形关联
         self.layout_dict = {
             'tx0rx0': QVBoxLayout(self.widget_tx0rx0),
@@ -131,7 +135,6 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
                 init_1DFFT_plot(ax)
             else:
                 init_ADC4_plot(ax)
-
 
     def _log(self, s: str):
         # 重定向日志到 textEdit_log
@@ -185,7 +188,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         # 判断是否满足显示间隔
         if current_time - self.last_display_time > self.display_interval:
             self.DisplayADC4Waveform(iq, chirp, sample)
-            self.Display1DFFT(self.fft_result_1D)
+            self.Display1DFFT(self.fft_result_1D, sample)
             self.last_display_time = current_time
         else:
             pass
@@ -193,7 +196,6 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.bus.log.emit(f"距离计算结果：FFT={R_fft:.2f} m, Macleod={R_macleod:.2f} m, CZT FFT Peak={R_czt_fftpeak:.2f} m, CZT Macleod={R_czt_macleod:.2f} m")
 
 # ================== Plot图像部分内容 ==================
-
     def DisplayADC4Waveform(self, iq, chirp: int, sample: int):
         """
         接收到一帧数据后，显示 ADC4 波形
@@ -215,10 +217,10 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             ax.grid(True)
             self.canvas_dict[key].draw()  # 更新画布
 
-    def Display1DFFT(self, fft_result_in):
+    def Display1DFFT(self, fft_result_in, sample: int):
 
         fft_result = fft_result_in
-
+        bin_ticks = np.arange(0, sample , 20)
         # --- 绘制 FFT 结果到最后一个 FFT_ax ---
         last_key = list(self.ax_dict.keys())[-1]
 
@@ -228,7 +230,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         FFT_ax.clear()
         FFT_ax.plot(np.abs(fft_result))
         FFT_ax.grid(True)  # 显示网格
-
+        FFT_ax.set_xticks(bin_ticks)  # 设置 x 轴刻度
         FFT_ax.set_title("1DFFT result")
         FFT_ax.set_xlabel("FFT Bin")
         FFT_ax.set_ylabel("Amplitude")
@@ -336,9 +338,9 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         iq = reorder_frame(frame_data_flat, int(chirp), int(sample))
         self.DisplayADC4Waveform(iq, int(chirp), int(sample))
         self.fft_result_1D = Perform1D_FFT(iq)
-        self.Display1DFFT(self.fft_result_1D)
-        R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft(self.fft_result_1D, chirp, sample)
-        self.bus.log.emit(f"距离计算结果：FFT={R_fft:.2f} m, Macleod={R_macleod:.2f} m, CZT FFT Peak={R_czt_fftpeak:.2f} m, CZT Macleod={R_czt_macleod:.2f} m")
+        self.Display1DFFT(self.fft_result_1D, int(sample))
+        R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_result_1D, chirp, sample)
+        self.bus.log.emit(f"距离计算结果：FFT={R_fft:.4f} m, Macleod={R_macleod:.4f} m, CZT FFT Peak={R_czt_fftpeak:.4f} m, CZT Macleod={R_czt_macleod:.4f} m")
 
     def ShowNextFrame(self):
         if self.current_index < len(self.frame_data_list) - 1:
