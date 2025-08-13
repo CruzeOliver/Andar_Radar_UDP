@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from PyQt5.QtCore import QObject, pyqtSignal
 import time
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QFileDialog, QMessageBox
+from PyQt5.QtGui import QPixmap
 import numpy as np
 import pyqtgraph as pg
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -106,6 +107,12 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         """
         创建 Matplotlib 图形并将其关联到指定的 Qt widgets。
         """
+        pixmap = QPixmap(r'CJLU_logo.png')
+        if pixmap.isNull():
+            QMessageBox.warning(self, "图像加载失败", "无法加载图像，请检查文件路径是否正确。")
+        else:
+            self.CJLU_logo_label.setPixmap(pixmap)
+            self.CJLU_logo_label.setScaledContents(True)
         # 定义布局，将每个 widget 与 matplotlib 图形关联
         self.layout_dict = {
             'tx0rx0': QVBoxLayout(self.widget_tx0rx0),
@@ -313,7 +320,6 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         """
         显示当前帧的数据
         """
-        #
         #print(f"显示当前帧数据：{frame_data}")
         #print(f"帧数据形状：{frame_data.shape}")
         self.bus.log.emit(f"{self.frame_data_list[self.current_index]} 数据已加载")
