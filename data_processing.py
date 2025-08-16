@@ -47,17 +47,30 @@ def reorder_frame(frame_bytes: bytes, chirp: int, sample: int,  window: np.ndarr
 def Perform1D_FFT(iq):
     """
     对 ADC 数据执行 1D FFT。
-    """
-    # iq的形状为 (4, n_chirp, n_points)
-    # 选取第0个虚拟天线的数据，形状为 (n_chirp, n_points)
-    data_for_fft = iq[0, :, :]
 
-    # 对所有chirp的数据进行平均以提高信噪比
-    # 结果 x_complex 形状为 (n_points,)，是一个一维数组
-    x_complex = np.mean(data_for_fft, axis=0)
-    # 计算FFT
-    fft_result = np.fft.fft(x_complex)
-    return fft_result
+    输入：
+        iq: np.ndarray, 形状为 (4, n_chirp, n_points)
+
+    输出：
+        fft_results: list, 长度为 4，每个元素是对应虚拟天线的 FFT 结果
+    """
+    n_ant = iq.shape[0]
+    fft_results = []
+
+    for ant in range(n_ant):
+        # 取第 ant 个虚拟天线的数据，形状为 (n_chirp, n_points)
+        data_for_fft = iq[ant, :, :]
+
+        # 对所有 chirp 数据求平均，提高信噪比
+        avg_data = np.mean(data_for_fft, axis=0)
+
+        # 对平均后的数据做 FFT
+        fft_result = np.fft.fft(avg_data)
+
+        # 保存结果
+        fft_results.append(fft_result)
+
+    return fft_results
 
 def calculate_distance_from_fft2(fft_result_in, n_chirp, n_points):
     """
