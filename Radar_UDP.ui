@@ -371,13 +371,22 @@
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="tab_2">
+      <widget class="QWidget" name="tab_2DFFT">
        <attribute name="title">
-        <string>ADC</string>
+        <string>2D_FFT_T2R2</string>
        </attribute>
-       <layout class="QHBoxLayout" name="horizontalLayout_2">
-        <item>
-         <widget class="QWidget" name="widget_adc" native="true"/>
+       <layout class="QGridLayout" name="gridLayout_4">
+        <item row="0" column="0">
+         <widget class="QWidget" name="widget_2DFFTtx0rx0" native="true"/>
+        </item>
+        <item row="0" column="1">
+         <widget class="QWidget" name="widget_2DFFTtx0rx1" native="true"/>
+        </item>
+        <item row="1" column="0">
+         <widget class="QWidget" name="widget_2DFFTtx1rx0" native="true"/>
+        </item>
+        <item row="1" column="1">
+         <widget class="QWidget" name="widget_2DFFTtx1rx1" native="true"/>
         </item>
        </layout>
       </widget>

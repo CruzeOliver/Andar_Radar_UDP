@@ -23,3 +23,15 @@ def init_1DFFT_plot(ax):
     ax.grid(True)  # 显示网格
     ax.set_xlim(0, 256)  # 设置 X 轴范围，适应数据范围
     ax.set_ylim(0, 1000)  # 设置 Y 轴范围，适应数据范围
+
+def init_2DFFT_plot(ax):
+    """
+    初始化 2D FFT 图形的样式
+    """
+    ax.set_facecolor('white')   # 设置背景色为白色
+    ax.set_xlabel('Doppler Bin', fontsize=10)  # 设置 X 轴标签和字体大小
+    ax.set_ylabel('Range Bin', fontsize=10)  # 设置 Y 轴标签和字体大小
+    ax.set_title('2D FFT Result', fontsize=10)  # 设置标题字体大小
+    ax.grid(True)  # 不显示网格
+    ax.set_xlim(0, 256)  # 设置 X 轴范围，适应数据范围
+    ax.set_ylim(0, 32)  # 设置 Y 轴范围，适应数据范围

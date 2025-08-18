@@ -9,6 +9,7 @@ import numpy as np
 import pyqtgraph as pg
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
+from matplotlib.colorbar import ColorbarBase
 from plot_utils import *
 from data_processing import *
 import scipy.io
@@ -124,12 +125,18 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         # 1D FFT 四个窗口
         fft_keys = ['1DFFTtx0rx0', '1DFFTtx0rx1', '1DFFTtx1rx0', '1DFFTtx1rx1']
 
+        # 2D FFT 窗口
+        fft2d_keys = ['2DFFTtx0rx0', '2DFFTtx0rx1', '2DFFTtx1rx0', '2DFFTtx1rx1']
+
         # 所有布局对应 QWidget
         self.layout_dict = {}
         for key in adc4_keys:
             self.layout_dict[key] = QVBoxLayout(getattr(self, f'widget_{key}'))
 
         for key in fft_keys:
+            self.layout_dict[key] = QVBoxLayout(getattr(self, f'widget_{key}'))
+
+        for key in fft2d_keys:
             self.layout_dict[key] = QVBoxLayout(getattr(self, f'widget_{key}'))
 
         # 循环初始化所有图形
@@ -148,6 +155,8 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             # 根据 key 初始化不同样式
             if key in fft_keys:
                 init_1DFFT_plot(ax)
+            elif key in fft2d_keys:
+                init_2DFFT_plot(ax)
             else:
                 init_ADC4_plot(ax)
 
@@ -200,15 +209,17 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         current_time = time.time()
         iq = reorder_frame(frame, chirp, sample)
         self.fft_results_1D = Perform1D_FFT(iq)
+        self.fft_result_2D = Perform2D_FFT(self.fft_results_1D)
         # 判断是否满足显示间隔
         if current_time - self.last_display_time > self.display_interval:
             self.DisplayADC4Waveform(iq, chirp, sample)
             self.Display1DFFT(self.fft_results_1D, sample)
+            self.Display2DFFT(self.fft_result_2D, sample, chirp)
             self.last_display_time = current_time
         else:
             pass
-        R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[0], chirp, sample)
-        self.bus.log.emit(f"距离计算结果：FFT={R_fft:.2f} m, Macleod={R_macleod:.2f} m, CZT FFT Peak={R_czt_fftpeak:.2f} m, CZT Macleod={R_czt_macleod:.2f} m")
+        #R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[0], chirp, sample)
+        #self.bus.log.emit(f"距离计算结果：FFT={R_fft:.2f} m, Macleod={R_macleod:.2f} m, CZT FFT Peak={R_czt_fftpeak:.2f} m, CZT Macleod={R_czt_macleod:.2f} m")
 
 # ================== Plot图像部分内容 ==================
     def DisplayADC4Waveform(self, iq, chirp: int, sample: int):
@@ -265,6 +276,51 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             fft_ax.set_xlabel("FFT Bin")
             fft_ax.set_ylabel("Amplitude")
             fft_ax.grid(True)
+
+            fft_canvas.draw()
+
+    def Display2DFFT(self, fft2d_results, n_points: int, n_chirp: int):
+        """
+        显示四路虚拟天线的 2D FFT（距离-多普勒）结果。
+
+        fft2d_results: np.ndarray, 形状为 (n_ant, n_chirp, n_points)
+        n_points: int, 距离维度点数
+        n_chirp: int, 多普勒维度点数
+        """
+
+        fft2d_keys = ['2DFFTtx0rx0', '2DFFTtx0rx1', '2DFFTtx1rx0', '2DFFTtx1rx1']
+        max_range_bin = n_points // 2
+
+        for ant_idx, key in enumerate(fft2d_keys):
+            fft_ax = self.ax_dict[key]
+            fft_canvas = self.canvas_dict[key]
+
+            # 只移除当前子图的颜色条
+            if hasattr(fft_ax, 'cbar'):  # 检查是否存在颜色条属性
+                fft_ax.cbar.remove()     # 移除现有颜色条
+                del fft_ax.cbar          # 删除属性引用
+
+            fft_ax.clear()
+
+            fft_data = fft2d_results[ant_idx, :, :]
+            display_data = np.abs(fft_data[:max_range_bin, :])
+
+            im = fft_ax.imshow(
+                np.log10(display_data),
+                aspect='auto',
+                cmap='jet',
+                origin='lower'
+            )
+
+            fft_ax.set_title(f"{key}")
+            fft_ax.set_xlabel("doppler Bin")
+            fft_ax.set_ylabel("range Bin")
+            fft_ax.grid(False)
+
+            # 为当前 Axes 添加颜色条并保存引用
+            cbar = fft_canvas.figure.colorbar(im, ax=fft_ax)
+            cbar.set_label("Amplitude (dB)")
+            fft_ax.cbar = cbar  # 将颜色条附加到axes对象上
 
             fft_canvas.draw()
 
@@ -368,9 +424,11 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             chirp = frame_data.shape[0]
             frame_data_flat = frame_data.flatten()
         iq = reorder_frame(frame_data_flat, int(chirp), int(sample))
-        self.DisplayADC4Waveform(iq, int(chirp), int(sample))
+        self.DisplayADC4Waveform(iq, chirp, sample)
         self.fft_results_1D = Perform1D_FFT(iq)
-        self.Display1DFFT(self.fft_results_1D, int(sample))
+        self.fft_result_2D = Perform2D_FFT(self.fft_results_1D)
+        self.Display1DFFT(self.fft_results_1D, sample)
+        self.Display2DFFT(self.fft_result_2D, sample, chirp)
         R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[0], chirp, sample)
         self.bus.log.emit(f"距离计算结果：FFT={R_fft:.4f} m, Macleod={R_macleod:.4f} m, CZT FFT Peak={R_czt_fftpeak:.4f} m, CZT Macleod={R_czt_macleod:.4f} m")
 

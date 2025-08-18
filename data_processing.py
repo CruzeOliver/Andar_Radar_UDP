@@ -64,7 +64,7 @@ def Perform1D_FFT(iq):
 
     return fft_results
 
-def Perform2D_FFT(fft1_results):
+def Perform2D_FFT(fft_results):
     """
     对 1D FFT 结果执行 2D FFT，以获取多普勒信息。
 
@@ -76,7 +76,7 @@ def Perform2D_FFT(fft1_results):
     """
     # 对 Chirp 维度（第二个轴）执行 FFT
     # 这将生成一个形状为 (n_ant, n_chirp, n_points) 的数组
-    fft2d_intermediate = np.fft.fft(fft1_results, axis=1)
+    fft2d_intermediate = np.fft.fft(fft_results, axis=1)
 
     # 对 FFT 结果进行移位，使多普勒零点位于中心
     # 这一步是可选的，但有助于可视化
