@@ -46,31 +46,44 @@ def reorder_frame(frame_bytes: bytes, chirp: int, sample: int,  window: np.ndarr
 
 def Perform1D_FFT(iq):
     """
-    对 ADC 数据执行 1D FFT。
+    对每个 Chirp 数据执行 1D FFT，保留所有 Chirp。
 
     输入：
-        iq: np.ndarray, 形状为 (4, n_chirp, n_points)
+        iq: np.ndarray, 形状为 (n_ant, n_chirp, n_points)
 
     输出：
-        fft_results: list, 长度为 4，每个元素是对应虚拟天线的 FFT 结果
+        fft1_results: np.ndarray, 形状为 (n_ant, n_chirp, n_points)
     """
-    n_ant = iq.shape[0]
-    fft_results = []
+    n_ant, n_chirp, n_points = iq.shape
+    fft_results = np.zeros((n_ant, n_chirp, n_points), dtype=complex)
 
     for ant in range(n_ant):
-        # 取第 ant 个虚拟天线的数据，形状为 (n_chirp, n_points)
-        data_for_fft = iq[ant, :, :]
-
-        # 对所有 chirp 数据求平均，提高信噪比
-        avg_data = np.mean(data_for_fft, axis=0)
-
-        # 对平均后的数据做 FFT
-        fft_result = np.fft.fft(avg_data)
-
-        # 保存结果
-        fft_results.append(fft_result)
+        # 对每个天线上的所有 Chirp 进行 1D FFT
+        # axis=-1 表示对最后一个轴（样本点数）做 FFT
+        fft_results[ant, :, :] = np.fft.fft(iq[ant, :, :], axis=-1)
 
     return fft_results
+
+def Perform2D_FFT(fft1_results):
+    """
+    对 1D FFT 结果执行 2D FFT，以获取多普勒信息。
+
+    输入：
+        fft1_results: np.ndarray, 形状为 (n_ant, n_chirp, n_points)
+
+    输出：
+        fft2d_results: np.ndarray, 形状为 (n_ant, n_points, n_chirp)
+    """
+    # 对 Chirp 维度（第二个轴）执行 FFT
+    # 这将生成一个形状为 (n_ant, n_chirp, n_points) 的数组
+    fft2d_intermediate = np.fft.fft(fft1_results, axis=1)
+
+    # 对 FFT 结果进行移位，使多普勒零点位于中心
+    # 这一步是可选的，但有助于可视化
+    fft2d_results = np.fft.fftshift(fft2d_intermediate, axes=1)
+
+    return fft2d_results
+
 
 def calculate_distance_from_fft2(fft_result_in, n_chirp, n_points):
     """
@@ -79,7 +92,8 @@ def calculate_distance_from_fft2(fft_result_in, n_chirp, n_points):
     然后使用Macleod和Chirp-Z插值进行峰值细化。
     """
     #传入的fft_result_in是已经计算好的FFT结果
-    fft_result = fft_result_in
+    #fft_result_in是（ant, chirp, n_points）形状的数组，现在对0号虚拟天线进行处理，求平均
+    fft_result = np.mean(fft_result_in[:, :], axis=0)
 
     # 步骤 3: 计算幅度谱并找到FFT峰值
     fft_sum = np.abs(fft_result)

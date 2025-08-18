@@ -87,7 +87,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.comboBox_MatFrom.addItems(options)
         self.comboBox_MatFrom.currentIndex = 0  # 默认选择第一个选项
 
-        self.fft_results_1D = []
+        self.fft_results_1D = None
         self.fft_result_2D = None
         self.frame_all_data = None
         self.frame_data_list = []
@@ -207,7 +207,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             self.last_display_time = current_time
         else:
             pass
-        R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft(self.fft_results_1D[0], chirp, sample)
+        R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[0], chirp, sample)
         self.bus.log.emit(f"距离计算结果：FFT={R_fft:.2f} m, Macleod={R_macleod:.2f} m, CZT FFT Peak={R_czt_fftpeak:.2f} m, CZT Macleod={R_czt_macleod:.2f} m")
 
 # ================== Plot图像部分内容 ==================
@@ -235,24 +235,32 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             ax.grid(True)
             self.canvas_dict[key].draw()  # 更新画布
 
-    def Display1DFFT(self, fft_results, sample: int):
+    def Display1DFFT(self, fft_results_in, sample: int):
         """
         显示四路虚拟天线的 1D FFT 结果。
 
-        fft_results: list 或 np.ndarray, 长度为4，每个元素是对应虚拟天线的 FFT 结果
+        fft_results_in: np.ndarray, 形状为 (n_ant, n_chirp, n_points)
         sample: int, FFT 点数
         """
-
-        # 四个虚拟天线的 key 对应 1D FFT widgets
-        # 对应的 1D FFT widget keys
         fft_keys = ['1DFFTtx0rx0', '1DFFTtx0rx1', '1DFFTtx1rx0', '1DFFTtx1rx1']
 
+        # FFT 结果的有效点数
+        max_bin = sample // 2
+
+        # 对每个天线的数据进行循环
         for ant_idx, key in enumerate(fft_keys):
             fft_ax = self.ax_dict[key]
             fft_canvas = self.canvas_dict[key]
 
             fft_ax.clear()
-            fft_ax.plot(np.abs(fft_results[ant_idx]), color='r')
+
+            # 从三维数组中选择一个天线的数据，并对所有 Chirp 的 FFT 结果求平均
+            # 结果是一个形状为 (n_points,) 的一维数组
+            avg_fft_result = np.mean(fft_results_in[ant_idx, :, :], axis=0)
+
+            # 仅绘制 FFT 结果的前半部分
+            fft_ax.plot(np.abs(avg_fft_result[:max_bin]), color='r')
+
             fft_ax.set_title(f"{key}")
             fft_ax.set_xlabel("FFT Bin")
             fft_ax.set_ylabel("Amplitude")
