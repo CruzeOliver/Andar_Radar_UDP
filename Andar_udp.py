@@ -111,7 +111,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         """
         创建 Matplotlib 图形并将其关联到指定的 Qt widgets。
         """
-        self.setWindowIcon(QIcon('Radar_UDP_icon2.png'))  # 设置窗口图标
+        self.setWindowIcon(QIcon('Radar_UDP_icon.png'))  # 设置窗口图标
         pixmap = QPixmap(r'CJLU_logo.png')
         if pixmap.isNull():
             QMessageBox.warning(self, "图像加载失败", "无法加载图像，请检查文件路径是否正确。")
