@@ -300,12 +300,9 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             fft_canvas = self.canvas_dict[key]
 
             # 你的颜色条处理代码，保持不变
-            if hasattr(fft_ax, 'cbar'):
-                try:
-                    fft_ax.cbar.remove()
-                except ValueError:
-                    pass
-                del fft_ax.cbar
+            if hasattr(fft_ax, 'cbar'):  # 检查是否存在颜色条属性
+                fft_ax.cbar.remove()     # 移除现有颜色条
+                del fft_ax.cbar          # 删除属性引用
 
             fft_ax.clear()
 
@@ -334,7 +331,6 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             fft_ax.set_xticklabels([f"{int(bin)}" for bin in doppler_bins])
             fft_ax.set_xlabel("Doppler Bin")
 
-            # 你的颜色条创建代码，保持不变
             cbar = fft_canvas.figure.colorbar(im, ax=fft_ax)
             cbar.set_label("Amplitude (dB)")
             fft_ax.cbar = cbar

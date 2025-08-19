@@ -185,7 +185,7 @@ def calculate_distance_from_fft(fft_result_in, n_chirp, n_points):
     返回:
     tuple: 包含四种距离计算结果的元组 (R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod)。
     """
-    fft_result = fft_result_in
+    fft_result = np.mean(fft_result_in[:, :], axis=0)
 
     # 步骤 3: 计算幅度谱并找到FFT峰值
     fft_sum = np.abs(fft_result)
