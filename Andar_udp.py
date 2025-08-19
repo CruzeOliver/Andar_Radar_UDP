@@ -96,7 +96,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.tx_sock   = None
 
         self.last_display_time = time.time()# 记录最后显示的时间
-        self.display_interval = 1.0 # 1秒间隔
+        self.display_interval = 1.0
 
         # 存放绘图 canvas 和 axes 对象
         self.canvas_dict = {}
@@ -213,8 +213,10 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         # 判断是否满足显示间隔
         if current_time - self.last_display_time > self.display_interval:
             self.DisplayADC4Waveform(iq, chirp, sample)
-            self.Display1DFFT(self.fft_results_1D, sample)
-            self.Display2DFFT(self.fft_result_2D, sample, chirp)
+            if self.checkBox_1dfft.isChecked():
+                self.Display1DFFT(self.fft_results_1D, sample)
+            if self.checkBox_2dfft.isChecked():
+                self.Display2DFFT(self.fft_result_2D, sample, chirp)
             self.last_display_time = current_time
         else:
             pass
@@ -244,7 +246,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             ax.set_ylabel("Amplitude")
             ax.legend(loc='best')
             ax.grid(True)
-            self.canvas_dict[key].draw()  # 更新画布
+            self.canvas_dict[key].draw_idle()  # 更新画布
 
     def Display1DFFT(self, fft_results_in, sample: int):
         """
@@ -277,7 +279,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             fft_ax.set_ylabel("Amplitude")
             fft_ax.grid(True)
 
-            fft_canvas.draw()
+            fft_canvas.draw_idle()
 
     def Display2DFFT(self, fft2d_results, n_points: int, n_chirp: int):
         """
@@ -335,7 +337,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             cbar.set_label("Amplitude (dB)")
             fft_ax.cbar = cbar
 
-            fft_canvas.draw()
+            fft_canvas.draw_idle()
 
 # ================== 文件读取部分内容 ==================
     def save_to_mat(self,frame_data, sample_number, chirp_number, filename="raw_data.mat"):
@@ -440,8 +442,10 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.DisplayADC4Waveform(iq, chirp, sample)
         self.fft_results_1D = Perform1D_FFT(iq)
         self.fft_result_2D = Perform2D_FFT(self.fft_results_1D)
-        self.Display1DFFT(self.fft_results_1D, sample)
-        self.Display2DFFT(self.fft_result_2D, sample, chirp)
+        if self.checkBox_1dfft.isChecked():
+            self.Display1DFFT(self.fft_results_1D, sample)
+        if self.checkBox_2dfft.isChecked():
+            self.Display2DFFT(self.fft_result_2D, sample, chirp)
         R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[0], chirp, sample)
         self.bus.log.emit(f"距离计算结果：FFT={R_fft:.4f} m, Macleod={R_macleod:.4f} m, CZT FFT Peak={R_czt_fftpeak:.4f} m, CZT Macleod={R_czt_macleod:.4f} m")
 
