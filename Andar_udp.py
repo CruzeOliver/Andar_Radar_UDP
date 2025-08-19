@@ -289,38 +289,55 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         """
 
         fft2d_keys = ['2DFFTtx0rx0', '2DFFTtx0rx1', '2DFFTtx1rx0', '2DFFTtx1rx1']
+
         max_range_bin = n_points // 2
+
+        # 确保Perform2D_FFT 的数组形状是 (n_ant, n_points, n_chirp)，
+        fft2d_results_T = np.transpose(fft2d_results, (0, 2, 1))
 
         for ant_idx, key in enumerate(fft2d_keys):
             fft_ax = self.ax_dict[key]
             fft_canvas = self.canvas_dict[key]
 
-            # 只移除当前子图的颜色条
-            if hasattr(fft_ax, 'cbar'):  # 检查是否存在颜色条属性
-                fft_ax.cbar.remove()     # 移除现有颜色条
-                del fft_ax.cbar          # 删除属性引用
+            # 你的颜色条处理代码，保持不变
+            if hasattr(fft_ax, 'cbar'):
+                try:
+                    fft_ax.cbar.remove()
+                except ValueError:
+                    pass
+                del fft_ax.cbar
 
             fft_ax.clear()
 
-            fft_data = fft2d_results[ant_idx, :, :]
+            # 获取要显示的数据，形状为 (n_points, n_chirp)
+            fft_data = fft2d_results_T[ant_idx, :, :]
             display_data = np.abs(fft_data[:max_range_bin, :])
+
+            # 确保数据没有负数或零，以避免 log 警告
+            display_data[display_data <= 1e-6] = 1e-6
 
             im = fft_ax.imshow(
                 np.log10(display_data),
                 aspect='auto',
                 cmap='jet',
-                origin='lower'
+                origin='lower',
+                interpolation='none'
             )
 
             fft_ax.set_title(f"{key}")
-            fft_ax.set_xlabel("doppler Bin")
-            fft_ax.set_ylabel("range Bin")
+            fft_ax.set_ylabel("Range Bin")
             fft_ax.grid(False)
 
-            # 为当前 Axes 添加颜色条并保存引用
+            # 修正多普勒轴的刻度和标签
+            doppler_bins = np.linspace(-n_chirp / 2, n_chirp / 2, 5)
+            fft_ax.set_xticks(np.linspace(0, n_chirp - 1, 5))
+            fft_ax.set_xticklabels([f"{int(bin)}" for bin in doppler_bins])
+            fft_ax.set_xlabel("Doppler Bin")
+
+            # 你的颜色条创建代码，保持不变
             cbar = fft_canvas.figure.colorbar(im, ax=fft_ax)
             cbar.set_label("Amplitude (dB)")
-            fft_ax.cbar = cbar  # 将颜色条附加到axes对象上
+            fft_ax.cbar = cbar
 
             fft_canvas.draw()
 

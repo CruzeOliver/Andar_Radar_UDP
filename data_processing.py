@@ -72,7 +72,7 @@ def Perform2D_FFT(fft_results):
         fft1_results: np.ndarray, 形状为 (n_ant, n_chirp, n_points)
 
     输出：
-        fft2d_results: np.ndarray, 形状为 (n_ant, n_points, n_chirp)
+        fft2d_results: np.ndarray, 形状为 (n_ant, n_chirp, n_points)
     """
     # 对 Chirp 维度（第二个轴）执行 FFT
     # 这将生成一个形状为 (n_ant, n_chirp, n_points) 的数组
