@@ -1,9 +1,9 @@
 from UI.Ui_Radar_UDP import Ui_MainWindow
 import sys, socket, threading
 from dataclasses import dataclass
-from PyQt5.QtCore import QObject, pyqtSignal, QRectF
+from PyQt5.QtCore import QObject, pyqtSignal, QRectF, Qt
 import time
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QFileDialog, QMessageBox, QSizePolicy
+from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox,  QTableWidget, QTableWidgetItem, QHeaderView
 from PyQt5.QtGui import QPixmap, QIcon
 import numpy as np
 import pyqtgraph as pg
@@ -117,6 +117,20 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.bus.log.connect(self._log)
         self.bus.frame_ready.connect(self.on_frame_ready)
 
+        self.tableWidget_distance.setColumnCount(4)
+        header_labels = ['FFT', 'Macleod', 'CZT FFT Peak', 'CZT Macleod']
+        self.tableWidget_distance.setHorizontalHeaderLabels(header_labels)
+
+        # 让表格内容不可编辑
+        self.tableWidget_distance.setEditTriggers(QTableWidget.NoEditTriggers)
+
+        # *** 修改点 1: 设置列宽填充整个控件 ***
+        # QHeaderView.Stretch 模式会使所有列等宽拉伸，填充可用空间。
+        self.tableWidget_distance.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+        # 隐藏行号
+        self.tableWidget_distance.verticalHeader().setVisible(False)
+
     def generate_unique_filename(self):
         """生成一个唯一的 .mat 文件名并保存为实例属性"""
         timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
@@ -159,7 +173,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.pushButton_Connect.setEnabled(True)
         self.pushButton_Disconnect.setEnabled(False)
         if self.checkBox_IsSave.isChecked():
-            self.bus.log.emit("[OK] 原始数据保存完成")
+            self.bus.log.emit("[OK] 原始数据保存至f{self.save_filename}，请在文件夹中查看")
 
     # ---- 整帧到达回调函数 ----
     def on_frame_ready(self, frame: bytes, sample: int, chirp: int, txrx: int):
@@ -307,7 +321,15 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             self.display.update_fft2d(self.fft_result_2D, sample, chirp)
 
         R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[0], chirp, sample)
-        self.bus.log.emit(f"距离计算结果：FFT={R_fft:.4f} m, Macleod={R_macleod:.4f} m, CZT FFT Peak={R_czt_fftpeak:.4f} m, CZT Macleod={R_czt_macleod:.4f} m")
+        # 更新表格显示距离计算结果
+        row_data = [f"{R_fft:.4f} m",f"{R_macleod:.4f} m",f"{R_czt_fftpeak:.4f} m",f"{R_czt_macleod:.4f} m"]
+        row_count = self.tableWidget_distance.rowCount()
+        self.tableWidget_distance.insertRow(row_count)
+        for i, value in enumerate(row_data):
+            item = QTableWidgetItem(value)
+            item.setTextAlignment(Qt.AlignCenter)# 设置单元格居中对齐
+            self.tableWidget_distance.setItem(row_count, i, item)
+        self.tableWidget_distance.scrollToBottom()# 滚动到底部
 
     def ShowNextFrame(self):
         if self.current_index < len(self.frame_data_list) - 1:

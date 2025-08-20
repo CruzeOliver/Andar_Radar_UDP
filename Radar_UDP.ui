@@ -29,7 +29,7 @@
      </widget>
     </item>
     <item row="0" column="0">
-     <widget class="QTabWidget" name="tabWidget">
+     <widget class="QTabWidget" name="tabWidget_Display">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
         <horstretch>10</horstretch>
@@ -137,31 +137,6 @@
         </item>
        </layout>
       </widget>
-     </widget>
-    </item>
-    <item row="2" column="0">
-     <widget class="QGroupBox" name="groupBox_3">
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-        <horstretch>2</horstretch>
-        <verstretch>3</verstretch>
-       </sizepolicy>
-      </property>
-      <property name="font">
-       <font>
-        <family>Times New Roman</family>
-        <weight>75</weight>
-        <bold>true</bold>
-       </font>
-      </property>
-      <property name="title">
-       <string>LogMessage</string>
-      </property>
-      <layout class="QHBoxLayout" name="horizontalLayout">
-       <item>
-        <widget class="QTextEdit" name="textEdit_log"/>
-       </item>
-      </layout>
      </widget>
     </item>
     <item row="0" column="2">
@@ -340,6 +315,9 @@
            <property name="text">
             <string>2DFFT</string>
            </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
           </widget>
          </item>
          <item row="0" column="1">
@@ -349,6 +327,9 @@
            </property>
            <property name="text">
             <string>1DFFT</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
            </property>
           </widget>
          </item>
@@ -377,14 +358,14 @@
        <item>
         <widget class="QPushButton" name="pushButton_Next">
          <property name="text">
-          <string>Next</string>
+          <string>Next Frame</string>
          </property>
         </widget>
        </item>
        <item>
         <widget class="QPushButton" name="pushButton_CloseFile">
          <property name="text">
-          <string>CloseFile</string>
+          <string>CloseFile/Init</string>
          </property>
         </widget>
        </item>
@@ -442,15 +423,55 @@
       </property>
      </widget>
     </item>
+    <item row="2" column="0">
+     <widget class="QTabWidget" name="tabWidget_Message">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+        <horstretch>2</horstretch>
+        <verstretch>3</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="font">
+       <font>
+        <family>Times New Roman</family>
+        <weight>75</weight>
+        <bold>true</bold>
+       </font>
+      </property>
+      <property name="currentIndex">
+       <number>1</number>
+      </property>
+      <widget class="QWidget" name="tab_log">
+       <attribute name="title">
+        <string>LogMessage</string>
+       </attribute>
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <item>
+         <widget class="QTextEdit" name="textEdit_log"/>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="tab_Distance">
+       <attribute name="title">
+        <string>Distance</string>
+       </attribute>
+       <layout class="QHBoxLayout" name="horizontalLayout_2">
+        <item>
+         <widget class="QTableWidget" name="tableWidget_distance"/>
+        </item>
+       </layout>
+      </widget>
+     </widget>
+    </item>
    </layout>
-   <zorder>tabWidget</zorder>
+   <zorder>tabWidget_Display</zorder>
    <zorder>line_3</zorder>
    <zorder>line</zorder>
    <zorder>line_4</zorder>
    <zorder>line_2</zorder>
    <zorder>groupBox_2</zorder>
    <zorder>frame</zorder>
-   <zorder>groupBox_3</zorder>
+   <zorder>tabWidget_Message</zorder>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">

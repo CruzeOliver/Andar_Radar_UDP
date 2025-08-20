@@ -237,7 +237,7 @@ def calculate_distance_from_fft2(fft_result_in, n_chirp, n_points):
     R_czt_macleod = (C * f_czt_macleod * CHIRP_T0 * 1e-6) / (2.0 * FM * 1e6)
 
     # 输出结果
-    print(f"FFT Distance: {R_fft:.4f} m | Macleod: {R_macleod:.4f} m | CZT@peak: {R_czt_fftpeak:.4f} m | CZT@Macleod: {R_czt_macleod:.4f} m")
+    #print(f"FFT Distance: {R_fft:.4f} m | Macleod: {R_macleod:.4f} m | CZT@peak: {R_czt_fftpeak:.4f} m | CZT@Macleod: {R_czt_macleod:.4f} m")
 
     return R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod
 
