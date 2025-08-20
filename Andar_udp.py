@@ -10,6 +10,7 @@ import pyqtgraph as pg
 from pyqtgraph import ImageView
 from data_processing import *
 import scipy.io
+import warnings
 from udp_handler import *
 from display_pg import PgDisplay
 
@@ -224,8 +225,17 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             # 将当前帧的数据添加到现有数据字典中
             existing_data[frame_timestamp] = reshaped_data[0]
 
-            # 使用 scipy 的 savemat 保存多个帧为独立的工作区（变量）
-            scipy.io.savemat(filename, existing_data)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=UserWarning)#消除对于“__header__”的警告
+                try:
+                    from scipy.io.matlab.mio import MatWriteWarning
+                    warnings.simplefilter("ignore", category=MatWriteWarning)
+                except ImportError:
+                    pass
+
+                scipy.io.savemat(filename, existing_data)
+
+
             #print(f"数据成功保存到 {filename}，包含 {len(existing_data)} 帧数据")
 
             return True
