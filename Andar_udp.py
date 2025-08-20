@@ -1,15 +1,17 @@
 from UI.Ui_Radar_UDP import Ui_MainWindow
 import sys, socket, threading
 from dataclasses import dataclass
-from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt5.QtCore import QObject, pyqtSignal, QRectF
 import time
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QFileDialog, QMessageBox, QSizePolicy
 from PyQt5.QtGui import QPixmap, QIcon
 import numpy as np
 import pyqtgraph as pg
+from pyqtgraph import ImageView
 from data_processing import *
 import scipy.io
 from udp_handler import *
+from collections import OrderedDict
 
 # ================== Qt 信号总线 ==================
 class Bus(QObject):
@@ -45,10 +47,8 @@ class UdpRxThread(threading.Thread):
                 continue
             except OSError:
                 break
-
             if sip != PEER_IP:
                 continue
-
             res = self._asm.process(data)
             if res is not None:
                 frame, sample, chirp, txrx = res
@@ -106,7 +106,6 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
     def setup_pg_widgets(self):
         pg.setConfigOptions(antialias=True)
 
-        # ---- 样式函数：统一白底、黑色坐标轴 ----
         def set_plot_style(pw: pg.PlotWidget):
             pw.setBackground('w')  # 背景白色
             # 坐标轴线条黑色
@@ -118,7 +117,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             # 网格灰色
             pw.showGrid(x=True, y=True, alpha=0.3)
 
-        # ---- 需要初始化的几个窗口 ----
+        # ---- 初始化窗口 ----
         adc4_keys  = ['tx0rx0', 'tx0rx1', 'tx1rx0', 'tx1rx1']
         fft1d_keys = ['1DFFTtx0rx0', '1DFFTtx0rx1', '1DFFTtx1rx0', '1DFFTtx1rx1']
         fft2d_keys = ['2DFFTtx0rx0', '2DFFTtx0rx1', '2DFFTtx1rx0', '2DFFTtx1rx1']
@@ -129,9 +128,12 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             layout = QVBoxLayout(w)
             pw = pg.PlotWidget()
             set_plot_style(pw)
+            #pw.getAxis('bottom').setTickSpacing(major=200, minor=100)
+            #pw.getAxis('left').setTickSpacing(major=500, minor=100)
             pw.addLegend(offset=(10, 10))
             pw.setLabel('bottom', 'Sample points')
             pw.setLabel('left', 'Amplitude')
+            pw.setTitle(f"ADC {key}", color='k', size='12pt')
             layout.addWidget(pw)
 
             curve_I = pw.plot(pen=pg.mkPen('r', width=2), name='I')  # 红色
@@ -144,27 +146,29 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             layout = QVBoxLayout(w)
             pw = pg.PlotWidget()
             set_plot_style(pw)
+            #pw.getAxis('bottom').setTickSpacing(major=50, minor=10)
+            #pw.getAxis('left').setTickSpacing(major=20, minor=5)
             pw.setLabel('bottom', 'FFT Bin')
             pw.setLabel('left', 'Amplitude')
+            pw.addLegend(offset=(10, 10))
+            pw.setTitle(f"{key}", color='k', size='12pt')
             layout.addWidget(pw)
 
             curve = pw.plot(pen=pg.mkPen('r', width=2), name='MAG')  # 红色
             self.pg_plot_dict[key] = {'pw': pw, 'MAG': curve}
 
-        # ---- 2D FFT 窗口：ImageView（背景就保持默认） ----
+        # ---- 2D FFT 窗口：ImageView ----
         for key in fft2d_keys:
             w = getattr(self, f'widget_{key}')
             layout = QVBoxLayout(w)
             iv = pg.ImageView(view=pg.PlotItem())
-            iv.ui.roiBtn.hide()
             iv.ui.menuBtn.hide()
-            iv.ui.histogram.gradient.loadPreset('thermal')  # 热力图配色
+            iv.ui.histogram.gradient.loadPreset('thermal') # 热力图配色
             layout.addWidget(iv)
             self.pg_img_dict[key] = iv
 
-
+    # ---- 重定向日志到 textEdit_log ----
     def _log(self, s: str):
-        # 重定向日志到 textEdit_log
         try:
             self.textEdit_log.append(s)
         except Exception:
@@ -226,6 +230,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         #R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[0], chirp, sample)
         #self.bus.log.emit(f"距离计算结果：FFT={R_fft:.2f} m, Macleod={R_macleod:.2f} m, CZT FFT Peak={R_czt_fftpeak:.2f} m, CZT Macleod={R_czt_macleod:.2f} m")
 
+
 # ================== Plot图像部分内容 ==================
     def DisplayADC4Waveform_pg(self, iq, chirp: int, sample: int):
         t = np.arange(sample)
@@ -239,72 +244,66 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             h['pw'].setXRange(0, sample, padding=0.02)
 
     def Display1DFFT_pg(self, fft_results_in, sample: int):
-        keys = ['1DFFTtx0rx0', '1DFFTtx0rx1', '1DFFTtx1rx0', '1DFFTtx1rx1']
+        fft1d_keys = ['1DFFTtx0rx0', '1DFFTtx0rx1', '1DFFTtx1rx0', '1DFFTtx1rx1']
         max_bin = sample // 2
         x = np.arange(max_bin)
-        for ant_idx, key in enumerate(keys):
+        for ant_idx, key in enumerate(fft1d_keys):
             avg_fft = np.mean(fft_results_in[ant_idx, :, :], axis=0)
             mag = np.abs(avg_fft[:max_bin])
             h = self.pg_plot_dict[key]
             h['MAG'].setData(x, mag)
             h['pw'].setXRange(0, max_bin, padding=0.02)
 
-    def Display2DFFT_pg(self, fft2d_results, n_points: int, n_chirp: int,
-                    percent_low: float = 0.5,   # 下分位数（调小=背景更亮）
-                    percent_high: float = 99.7, # 上分位数（调小=抑制尖峰更强）
-                    use_fftshift: bool = True   # 多普勒0移中
-                    ):
+    def Display2DFFT_pg(self, fft2d_results, n_points: int, n_chirp: int):
         """
-        复刻 MPL 的显示逻辑（log10），并在计算色标时排除 DC 列，避免“一条白柱 + 全黑背景”。
-        fft2d_results: (n_ant, n_chirp, n_points)
-        显示: 取前半程距离 bin，做 log10 幅度，列方向为多普勒。
+        fft2d_results: np.ndarray, 形状为 (n_ant, n_chirp, n_points)
+        n_points: int, 距离维度点数
+        n_chirp: int, 多普勒维度点数
         """
         if not hasattr(self, "pg_img_dict"):
             return
 
-        eps = 1e-12
         fft2d_keys = ['2DFFTtx0rx0', '2DFFTtx0rx1', '2DFFTtx1rx0', '2DFFTtx1rx1']
         max_range_bin = n_points // 2
 
-        # 转成 (n_ant, n_points, n_chirp) 与你 MPL 版本一致
-        rd = np.transpose(fft2d_results, (0, 2, 1))
+        # 手动定义 'jet' 色图
+        pos = np.linspace(0.0, 1.0, 7)
+        colors = [
+            (0, 0, 131), (0, 0, 255), (0, 255, 255),
+            (255, 255, 0), (255, 0, 0), (128, 0, 0), (0, 0, 0)
+        ]
+        colormap = pg.ColorMap(pos, colors)
 
         for ant_idx, key in enumerate(fft2d_keys):
             iv = self.pg_img_dict.get(key)
-            if iv is None:
+            if not isinstance(iv, ImageView):
                 continue
 
-            # 取前半程距离，幅度 + log10（与 MPL 一致，不做 dB 归一/去DC）
-            mag = np.abs(rd[ant_idx, :max_range_bin, :]) + eps      # (range, doppler)
-            if use_fftshift:
-                mag = np.fft.fftshift(mag, axes=1)                  # 多普勒0居中
-            img = np.log10(mag)                                     # 与 mpl.imshow(np.log10(.)) 一致
+            # 1. 准备数据，确保维度正确 (doppler, range)
+            raw = fft2d_results[ant_idx, :, :]
+            display_data = np.log10(np.abs(raw[:, :max_range_bin]) + 1e-12)
+            #display_data = np.swapaxes(display_data, 0, 1)
 
-            # ---- 关键：计算 levels 时“排除 DC 列”以免拉满 ----
-            cols = img.shape[1]
-            dc_col = cols // 2 if use_fftshift else 0
-            if cols > 2:  # 防边界
-                left = img[:, :dc_col].ravel()
-                right = img[:, dc_col+1:].ravel()
-                sample_for_levels = np.concatenate([left, right], axis=0)
-            else:
-                sample_for_levels = img.ravel()
+            # 2. 设置图像数据和颜色映射
+            iv.setImage(display_data, autoLevels=True)
+            iv.setColorMap(colormap)
 
-            lo = np.percentile(sample_for_levels, percent_low)
-            hi = np.percentile(sample_for_levels, percent_high)
-            if not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:
-                lo, hi = float(np.nanmin(img)), float(np.nanmax(img))
+            # 3. 设置物理坐标范围，确保 X轴是多普勒，Y轴是距离
+            doppler_bins, range_bins = display_data.shape
+            x_min, x_max = -doppler_bins / 2, doppler_bins / 2
+            y_min, y_max = 0, range_bins
 
-            # 写入（ImageView 需要转置: (x,y)=(列,行)）
-            iv.setImage(img.T, autoLevels=False, levels=(lo, hi))
-            iv.ui.histogram.setHistogramRange(lo, hi)
+            rect = QRectF(x_min, y_min, (x_max - x_min), (y_max - y_min))
+            iv.getImageItem().setRect(rect)
 
-            v = iv.getView()
-            v.setLabel('left', 'Range Bin')
-            v.setLabel('bottom', 'Doppler Bin' + (' (shifted)' if use_fftshift else ''))
-            v.invertY(False)           # y 轴向上
-            v.setAspectLocked(False)
-            v.autoRange()
+            # 4. 设置视图和标签
+            view = iv.getView()
+            view.setLabel('bottom', 'Doppler Bin')
+            view.setLabel('left', 'Range Bin')
+            view.setAspectLocked(False)
+            view.invertY(False)
+            view.autoRange()
+
 
 # ================== 文件读取部分内容 ==================
     def save_to_mat(self,frame_data, sample_number, chirp_number, filename="raw_data.mat"):
