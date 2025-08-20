@@ -66,7 +66,36 @@ python Andar_udp.py
 
 
 
-## 主要功能预览
+## 主要功能
+
+### 传输协议：UDP
+包长：1024byte
+
+数据类型：大端序
+
+First Frame（1024byte）：
+
+|    4byte 	  |     4byte   	  |    4byte  	  |    4byte  	 |    4byte    	|   4byte	   |
+
+FirstNumber     SecondNumber         FrameID            ChirpNum     Sample_POINT      TXRXTYPE
+
+其余补零（1000byte）
+
+FirstNumber : 0x11223344
+
+SecondNumber : 0x44332211
+
+FrameID : 发送完ADC采样一次的所有数据自增加一（最大0xFFFFFFFF）
+
+ChirpNum : 下位机配置信息（例：64）
+
+Sample_POINT : 下位机配置信息（例：128）
+
+TXRXTYPE : 下位机配置信息（例：1）
+
+仅有三种模式：TX1RX1（1）、TX1RX2（2）、TX2RX2（4）
+
+Other Frame（1024byte）：纯ADC数据
 
 ### 实时 ADC 数据
 

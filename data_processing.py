@@ -15,7 +15,76 @@ CHIRP_T1 = 14  # 微秒
 CHIRP_T2 = 0   # 微秒
 CHIRP_PERIOD = CHIRP_T0 + CHIRP_T1 + CHIRP_T2  # Chirp周期，单位微秒
 
+""""
+    数据重组前：
+    chirp 0:
+      TX0RX0: [I0, Q0, I1, Q1, ..., I(block_size-1), Q(block_size-1)]
+      TX1RX0: [I0, Q0, I1, Q1, ..., I(block_size-1), Q(block_size-1)]
+      TX0RX1: [I0, Q0, I1, Q1, ..., I(block_size-1), Q(block_size-1)]
+      TX1RX1: [I0, Q0, I1, Q1, ..., I(block_size-1), Q(block_size-1)]
+    chirp 1:
+      TX0RX0: [I0, Q0, I1, Q1, ..., I(block_size-1), Q(block_size-1)]
+      TX1RX0: [I0, Q0, I1, Q1, ..., I(block_size-1), Q(block_size-1)]
+      TX0RX1: [I0, Q0, I1, Q1, ..., I(block_size-1), Q(block_size-1)]
+      TX1RX1: [I0, Q0, I1, Q1, ..., I(block_size-1), Q(block_size-1)]
+    ...
+    chirp (total_blocks-1):
+      TX0RX0: [I0, Q0, I1, Q1, ..., I(block_size-1), Q(block_size-1)]
+      TX1RX0: [I0, Q0, I1, Q1, ..., I(block_size-1), Q(block_size-1)]
+      TX0RX1: [I0, Q0, I1, Q1, ..., I(block_size-1), Q(block_size-1)]
+      TX1RX1: [I0, Q0, I1, Q1, ..., I(block_size-1), Q(block_size-1)]
 
+    数据重组后：
+    [虚拟天线0][chirp 0][样点0], [虚拟天线0][chirp 0][样点1], ..., [虚拟天线0][chirp 0][样点block_size-1]
+    [虚拟天线0][chirp 1][样点0], [虚拟天线0][chirp 1][样点1], ..., [虚拟天线0][chirp 1][样点block_size-1]
+      ...
+
+    [虚拟天线1][chirp 0][样点0], ..., [虚拟天线1][chirp total_blocks-1][样点block_size-1]
+      ...
+
+    [虚拟天线3][chirp 0][样点0], ..., [虚拟天线3][chirp total_blocks-1][样点block_size-1]
+
+    天线映射：
+    原始顺序 [TX0RX0, TX1RX0, TX0RX1, TX1RX1] 映射为 [0, 2, 1, 3]
+
+    实际天线排布
+    --------------------
+    |                  |
+    |          TX1     |
+    |          TX0     |
+    |  RX0 RX1         |
+    |                  |
+    --------------------
+
+    虚拟天线排布
+    [ TX1RX0    TX1RX1 ]     -------->        [ 2  3 ]
+    [ TX0RX0    TX0RX1 ]     -------->        [ 0  1 ]
+
+
+    注意：
+    原始数据按 IQ 排列（即 I 在前，Q 在后）
+    但是文档标注为 QI，但经实测和角度稳定性验证为 IQ
+
+    补充说明：
+    用codeblock存储的MAT文件存储的时候是列优先，
+    所以在用MATLAB打开mat文件校验数据的时候，其数据格式应该如下：(2048*32) 采样点 256 chirp 32
+
+    用Python存储的mat文件是行优先，
+    所以在用Python打开mat文件校验数据的时候，其数据格式应该如下：(32*2048) 采样点 256 chirp 32
+
+    T0R0 Chirp0 I    T0R0 Chirp0 I
+    T0R0 Chirp0 Q    T0R0 Chirp0 Q
+    T0R0 Chirp0 I           *
+    T0R0 Chirp0 Q           *
+    T0R0 Chirp0 I    T1R0 Chirp0 I
+    T0R0 Chirp0 Q    T1R0 Chirp0 Q     ****
+         *                  *
+         *                  *
+         *                  *
+    T0R0 Chirp0 I    T1R0 Chirp0 I
+    T0R0 Chirp0 Q    T1R0 Chirp0 Q
+
+"""""
 #============ 雷达数据处理 =================
 
 def reorder_frame(frame_bytes: bytes, chirp: int, sample: int,  window: np.ndarray | None = None):
