@@ -49,3 +49,5 @@ bin/Debug/*
 !bin/Debug/*.ini
 *.mcap
 
+*.pyc
+*.mat
