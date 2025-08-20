@@ -7,10 +7,6 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QFileDialog,
 from PyQt5.QtGui import QPixmap, QIcon
 import numpy as np
 import pyqtgraph as pg
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-import matplotlib.pyplot as plt
-from matplotlib.colorbar import ColorbarBase
-from plot_utils import *
 from data_processing import *
 import scipy.io
 from udp_handler import *
@@ -81,6 +77,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         super().__init__(parent)
         self.setupUi(self)
         self.setWindowTitle("Radar UDP Interface")
+        self.setWindowIcon(QIcon('Radar_UDP_icon.png'))
         self.setMinimumSize(1800, 1400)
 
         self.pushButton_Disconnect.setEnabled(False)
@@ -98,67 +95,73 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.last_display_time = time.time()# 记录最后显示的时间
         self.display_interval = 1.0
 
-        # 存放绘图 canvas 和 axes 对象
-        self.canvas_dict = {}
-        self.ax_dict = {}
-        self.setup_mpl_widgets()
+        self.pg_plot_dict = {}  # 1D 曲线图（ADC/1DFFT）
+        self.pg_img_dict  = {}  # 2D 图像（2DFFT）
+        self.setup_pg_widgets()  # 初始化 PG 控件与曲线
 
         self.bus = Bus()
         self.bus.log.connect(self._log)
         self.bus.frame_ready.connect(self.on_frame_ready)
 
-    def setup_mpl_widgets(self):
-        """
-        创建 Matplotlib 图形并将其关联到指定的 Qt widgets。
-        """
-        self.setWindowIcon(QIcon('Radar_UDP_icon.png'))  # 设置窗口图标
-        pixmap = QPixmap(r'CJLU_logo.png')
-        if pixmap.isNull():
-            QMessageBox.warning(self, "图像加载失败", "无法加载图像，请检查文件路径是否正确。")
-        else:
-            self.CJLU_logo_label.setPixmap(pixmap)
-            self.CJLU_logo_label.setScaledContents(True)
+    def setup_pg_widgets(self):
+        pg.setConfigOptions(antialias=True)
 
-        # 原始 ADC4 窗口
-        adc4_keys = ['tx0rx0', 'tx0rx1', 'tx1rx0', 'tx1rx1']
+        # ---- 样式函数：统一白底、黑色坐标轴 ----
+        def set_plot_style(pw: pg.PlotWidget):
+            pw.setBackground('w')  # 背景白色
+            # 坐标轴线条黑色
+            pw.getAxis('bottom').setPen(pg.mkPen(color='k', width=1))
+            pw.getAxis('left').setPen(pg.mkPen(color='k', width=1))
+            # 坐标轴文字黑色
+            pw.getAxis('bottom').setTextPen('k')
+            pw.getAxis('left').setTextPen('k')
+            # 网格灰色
+            pw.showGrid(x=True, y=True, alpha=0.3)
 
-        # 1D FFT 四个窗口
-        fft_keys = ['1DFFTtx0rx0', '1DFFTtx0rx1', '1DFFTtx1rx0', '1DFFTtx1rx1']
-
-        # 2D FFT 窗口
+        # ---- 需要初始化的几个窗口 ----
+        adc4_keys  = ['tx0rx0', 'tx0rx1', 'tx1rx0', 'tx1rx1']
+        fft1d_keys = ['1DFFTtx0rx0', '1DFFTtx0rx1', '1DFFTtx1rx0', '1DFFTtx1rx1']
         fft2d_keys = ['2DFFTtx0rx0', '2DFFTtx0rx1', '2DFFTtx1rx0', '2DFFTtx1rx1']
 
-        # 所有布局对应 QWidget
-        self.layout_dict = {}
+        # ---- ADC 窗口：红=I，蓝=Q ----
         for key in adc4_keys:
-            self.layout_dict[key] = QVBoxLayout(getattr(self, f'widget_{key}'))
+            w = getattr(self, f'widget_{key}')
+            layout = QVBoxLayout(w)
+            pw = pg.PlotWidget()
+            set_plot_style(pw)
+            pw.addLegend(offset=(10, 10))
+            pw.setLabel('bottom', 'Sample points')
+            pw.setLabel('left', 'Amplitude')
+            layout.addWidget(pw)
 
-        for key in fft_keys:
-            self.layout_dict[key] = QVBoxLayout(getattr(self, f'widget_{key}'))
+            curve_I = pw.plot(pen=pg.mkPen('r', width=2), name='I')  # 红色
+            curve_Q = pw.plot(pen=pg.mkPen('b', width=2), name='Q')  # 蓝色
+            self.pg_plot_dict[key] = {'pw': pw, 'I': curve_I, 'Q': curve_Q}
 
+        # ---- 1D FFT 窗口：红色 ----
+        for key in fft1d_keys:
+            w = getattr(self, f'widget_{key}')
+            layout = QVBoxLayout(w)
+            pw = pg.PlotWidget()
+            set_plot_style(pw)
+            pw.setLabel('bottom', 'FFT Bin')
+            pw.setLabel('left', 'Amplitude')
+            layout.addWidget(pw)
+
+            curve = pw.plot(pen=pg.mkPen('r', width=2), name='MAG')  # 红色
+            self.pg_plot_dict[key] = {'pw': pw, 'MAG': curve}
+
+        # ---- 2D FFT 窗口：ImageView（背景就保持默认） ----
         for key in fft2d_keys:
-            self.layout_dict[key] = QVBoxLayout(getattr(self, f'widget_{key}'))
+            w = getattr(self, f'widget_{key}')
+            layout = QVBoxLayout(w)
+            iv = pg.ImageView(view=pg.PlotItem())
+            iv.ui.roiBtn.hide()
+            iv.ui.menuBtn.hide()
+            iv.ui.histogram.gradient.loadPreset('thermal')  # 热力图配色
+            layout.addWidget(iv)
+            self.pg_img_dict[key] = iv
 
-        # 循环初始化所有图形
-        for key, layout in self.layout_dict.items():
-            fig, ax = plt.subplots(figsize=(5, 3))  # 初始大小
-            canvas = FigureCanvas(fig)
-
-            # 自适应 widget 尺寸
-            canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-            canvas.updateGeometry()
-
-            layout.addWidget(canvas)
-            self.canvas_dict[key] = canvas
-            self.ax_dict[key] = ax
-
-            # 根据 key 初始化不同样式
-            if key in fft_keys:
-                init_1DFFT_plot(ax)
-            elif key in fft2d_keys:
-                init_2DFFT_plot(ax)
-            else:
-                init_ADC4_plot(ax)
 
     def _log(self, s: str):
         # 重定向日志到 textEdit_log
@@ -212,11 +215,11 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.fft_result_2D = Perform2D_FFT(self.fft_results_1D)
         # 判断是否满足显示间隔
         if current_time - self.last_display_time > self.display_interval:
-            self.DisplayADC4Waveform(iq, chirp, sample)
+            self.DisplayADC4Waveform_pg(iq, chirp, sample)
             if self.checkBox_1dfft.isChecked():
-                self.Display1DFFT(self.fft_results_1D, sample)
+                self.Display1DFFT_pg(self.fft_results_1D, sample)
             if self.checkBox_2dfft.isChecked():
-                self.Display2DFFT(self.fft_result_2D, sample, chirp)
+                self.Display2DFFT_pg(self.fft_result_2D, sample, chirp)
             self.last_display_time = current_time
         else:
             pass
@@ -224,120 +227,84 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         #self.bus.log.emit(f"距离计算结果：FFT={R_fft:.2f} m, Macleod={R_macleod:.2f} m, CZT FFT Peak={R_czt_fftpeak:.2f} m, CZT Macleod={R_czt_macleod:.2f} m")
 
 # ================== Plot图像部分内容 ==================
-    def DisplayADC4Waveform(self, iq, chirp: int, sample: int):
-        """
-        接收到一帧数据后，显示 ADC4 波形
-        """
-        # 绘制时域 I/Q 波形
+    def DisplayADC4Waveform_pg(self, iq, chirp: int, sample: int):
         t = np.arange(sample)
-        for ant_idx, (key, ax) in enumerate(list(self.ax_dict.items())[:4]):
-            I = np.real(iq[ant_idx, 0, :])  # 实部
-            Q = np.imag(iq[ant_idx, 0, :])  # 虚部
-            ax.clear()  # 清除之前的图像
+        adc_keys = ['tx0rx0', 'tx0rx1', 'tx1rx0', 'tx1rx1']
+        for ant_idx, key in enumerate(adc_keys):
+            I = np.real(iq[ant_idx, 0, :])
+            Q = np.imag(iq[ant_idx, 0, :])
+            h = self.pg_plot_dict[key]
+            h['I'].setData(t, I)
+            h['Q'].setData(t, Q)
+            h['pw'].setXRange(0, sample, padding=0.02)
 
-            # 绘制 I 和 Q 波形
-            ax.plot(t, I, label='I', color='r')  # 红色绘制 I
-            ax.plot(t, Q, label='Q', color='b')  # 蓝色绘制 Q
-            #init_ADC4_plot(ax)
-
-            # 更新图形
-            ax.set_title(f"ADC {key}")
-            ax.set_xlabel("Sample points")
-            ax.set_ylabel("Amplitude")
-            ax.legend(loc='best')
-            ax.grid(True)
-            self.canvas_dict[key].draw_idle()  # 更新画布
-
-    def Display1DFFT(self, fft_results_in, sample: int):
-        """
-        显示四路虚拟天线的 1D FFT 结果。
-
-        fft_results_in: np.ndarray, 形状为 (n_ant, n_chirp, n_points)
-        sample: int, FFT 点数
-        """
-        fft_keys = ['1DFFTtx0rx0', '1DFFTtx0rx1', '1DFFTtx1rx0', '1DFFTtx1rx1']
-
-        # FFT 结果的有效点数
+    def Display1DFFT_pg(self, fft_results_in, sample: int):
+        keys = ['1DFFTtx0rx0', '1DFFTtx0rx1', '1DFFTtx1rx0', '1DFFTtx1rx1']
         max_bin = sample // 2
+        x = np.arange(max_bin)
+        for ant_idx, key in enumerate(keys):
+            avg_fft = np.mean(fft_results_in[ant_idx, :, :], axis=0)
+            mag = np.abs(avg_fft[:max_bin])
+            h = self.pg_plot_dict[key]
+            h['MAG'].setData(x, mag)
+            h['pw'].setXRange(0, max_bin, padding=0.02)
 
-        # 对每个天线的数据进行循环
-        for ant_idx, key in enumerate(fft_keys):
-            fft_ax = self.ax_dict[key]
-            fft_canvas = self.canvas_dict[key]
-
-            fft_ax.clear()
-
-            # 从三维数组中选择一个天线的数据，并对所有 Chirp 的 FFT 结果求平均
-            # 结果是一个形状为 (n_points,) 的一维数组
-            avg_fft_result = np.mean(fft_results_in[ant_idx, :, :], axis=0)
-
-            # 仅绘制 FFT 结果的前半部分
-            fft_ax.plot(np.abs(avg_fft_result[:max_bin]), color='r')
-
-            fft_ax.set_title(f"{key}")
-            fft_ax.set_xlabel("FFT Bin")
-            fft_ax.set_ylabel("Amplitude")
-            fft_ax.grid(True)
-
-            fft_canvas.draw_idle()
-
-    def Display2DFFT(self, fft2d_results, n_points: int, n_chirp: int):
+    def Display2DFFT_pg(self, fft2d_results, n_points: int, n_chirp: int,
+                    percent_low: float = 0.5,   # 下分位数（调小=背景更亮）
+                    percent_high: float = 99.7, # 上分位数（调小=抑制尖峰更强）
+                    use_fftshift: bool = True   # 多普勒0移中
+                    ):
         """
-        显示四路虚拟天线的 2D FFT（距离-多普勒）结果。
-
-        fft2d_results: np.ndarray, 形状为 (n_ant, n_chirp, n_points)
-        n_points: int, 距离维度点数
-        n_chirp: int, 多普勒维度点数
+        复刻 MPL 的显示逻辑（log10），并在计算色标时排除 DC 列，避免“一条白柱 + 全黑背景”。
+        fft2d_results: (n_ant, n_chirp, n_points)
+        显示: 取前半程距离 bin，做 log10 幅度，列方向为多普勒。
         """
+        if not hasattr(self, "pg_img_dict"):
+            return
 
+        eps = 1e-12
         fft2d_keys = ['2DFFTtx0rx0', '2DFFTtx0rx1', '2DFFTtx1rx0', '2DFFTtx1rx1']
-
         max_range_bin = n_points // 2
 
-        # 确保Perform2D_FFT 的数组形状是 (n_ant, n_points, n_chirp)，
-        fft2d_results_T = np.transpose(fft2d_results, (0, 2, 1))
+        # 转成 (n_ant, n_points, n_chirp) 与你 MPL 版本一致
+        rd = np.transpose(fft2d_results, (0, 2, 1))
 
         for ant_idx, key in enumerate(fft2d_keys):
-            fft_ax = self.ax_dict[key]
-            fft_canvas = self.canvas_dict[key]
+            iv = self.pg_img_dict.get(key)
+            if iv is None:
+                continue
 
-            # 你的颜色条处理代码，保持不变
-            if hasattr(fft_ax, 'cbar'):  # 检查是否存在颜色条属性
-                fft_ax.cbar.remove()     # 移除现有颜色条
-                del fft_ax.cbar          # 删除属性引用
+            # 取前半程距离，幅度 + log10（与 MPL 一致，不做 dB 归一/去DC）
+            mag = np.abs(rd[ant_idx, :max_range_bin, :]) + eps      # (range, doppler)
+            if use_fftshift:
+                mag = np.fft.fftshift(mag, axes=1)                  # 多普勒0居中
+            img = np.log10(mag)                                     # 与 mpl.imshow(np.log10(.)) 一致
 
-            fft_ax.clear()
+            # ---- 关键：计算 levels 时“排除 DC 列”以免拉满 ----
+            cols = img.shape[1]
+            dc_col = cols // 2 if use_fftshift else 0
+            if cols > 2:  # 防边界
+                left = img[:, :dc_col].ravel()
+                right = img[:, dc_col+1:].ravel()
+                sample_for_levels = np.concatenate([left, right], axis=0)
+            else:
+                sample_for_levels = img.ravel()
 
-            # 获取要显示的数据，形状为 (n_points, n_chirp)
-            fft_data = fft2d_results_T[ant_idx, :, :]
-            display_data = np.abs(fft_data[:max_range_bin, :])
+            lo = np.percentile(sample_for_levels, percent_low)
+            hi = np.percentile(sample_for_levels, percent_high)
+            if not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:
+                lo, hi = float(np.nanmin(img)), float(np.nanmax(img))
 
-            # 确保数据没有负数或零，以避免 log 警告
-            display_data[display_data <= 1e-6] = 1e-6
+            # 写入（ImageView 需要转置: (x,y)=(列,行)）
+            iv.setImage(img.T, autoLevels=False, levels=(lo, hi))
+            iv.ui.histogram.setHistogramRange(lo, hi)
 
-            im = fft_ax.imshow(
-                np.log10(display_data),
-                aspect='auto',
-                cmap='jet',
-                origin='lower',
-                interpolation='none'
-            )
-
-            fft_ax.set_title(f"{key}")
-            fft_ax.set_ylabel("Range Bin")
-            fft_ax.grid(False)
-
-            # 修正多普勒轴的刻度和标签
-            doppler_bins = np.linspace(-n_chirp / 2, n_chirp / 2, 5)
-            fft_ax.set_xticks(np.linspace(0, n_chirp - 1, 5))
-            fft_ax.set_xticklabels([f"{int(bin)}" for bin in doppler_bins])
-            fft_ax.set_xlabel("Doppler Bin")
-
-            cbar = fft_canvas.figure.colorbar(im, ax=fft_ax)
-            cbar.set_label("Amplitude (dB)")
-            fft_ax.cbar = cbar
-
-            fft_canvas.draw_idle()
+            v = iv.getView()
+            v.setLabel('left', 'Range Bin')
+            v.setLabel('bottom', 'Doppler Bin' + (' (shifted)' if use_fftshift else ''))
+            v.invertY(False)           # y 轴向上
+            v.setAspectLocked(False)
+            v.autoRange()
 
 # ================== 文件读取部分内容 ==================
     def save_to_mat(self,frame_data, sample_number, chirp_number, filename="raw_data.mat"):
@@ -439,13 +406,13 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             chirp = frame_data.shape[0]
             frame_data_flat = frame_data.flatten()
         iq = reorder_frame(frame_data_flat, int(chirp), int(sample))
-        self.DisplayADC4Waveform(iq, chirp, sample)
+        self.DisplayADC4Waveform_pg(iq, chirp, sample)
         self.fft_results_1D = Perform1D_FFT(iq)
         self.fft_result_2D = Perform2D_FFT(self.fft_results_1D)
         if self.checkBox_1dfft.isChecked():
-            self.Display1DFFT(self.fft_results_1D, sample)
+            self.Display1DFFT_pg(self.fft_results_1D, sample)
         if self.checkBox_2dfft.isChecked():
-            self.Display2DFFT(self.fft_result_2D, sample, chirp)
+            self.Display2DFFT_pg(self.fft_result_2D, sample, chirp)
         R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[0], chirp, sample)
         self.bus.log.emit(f"距离计算结果：FFT={R_fft:.4f} m, Macleod={R_macleod:.4f} m, CZT FFT Peak={R_czt_fftpeak:.4f} m, CZT Macleod={R_czt_macleod:.4f} m")
 
@@ -461,9 +428,12 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.frame_data_list = []  # 清空数据
         self.current_index = 0  # 重置索引
         self.textEdit_log.clear()  # 清空日志
-        for key, ax in self.ax_dict.items():
-            ax.clear()
-            ax.figure.canvas.draw()  # 重新绘制图形
+        for h in self.pg_plot_dict.values():
+            if 'I' in h: h['I'].clear()
+            if 'Q' in h: h['Q'].clear()
+            if 'MAG' in h: h['MAG'].clear()
+        for iv in self.pg_img_dict.values():
+            iv.clear()
         self.bus.log.emit("已关闭文件，清空数据")
 
     def closeEvent(self, e):
