@@ -72,7 +72,7 @@ class PgDisplay:
     def update_fft2d(self, fft2d_results: np.ndarray, n_points: int, n_chirp: int):
         """
         fft2d_results: shape (4, n_chirp, n_points)
-        显示 log10(|data|)，并将 range 轴截半（与原逻辑一致）
+        显示 log10(|data|)，并将 range 轴截半
         """
         fft2d_keys = ['2DFFTtx0rx0', '2DFFTtx0rx1', '2DFFTtx1rx0', '2DFFTtx1rx1']
         max_range_bin = n_points // 2
@@ -151,10 +151,19 @@ class PgDisplay:
             self.pg_img_dict[key] = iv
 
     def _build_jet_colormap(self) -> pg.ColorMap:
-        # 与你原来的色表一致（0-255的RGB）
+        # 色表（0-255的RGB）
         pos = np.linspace(0.0, 1.0, 7)
         colors = [
             (0, 0, 131), (0, 0, 255), (0, 255, 255),
             (255, 255, 0), (255, 0, 0), (128, 0, 0), (0, 0, 0)
         ]
         return pg.ColorMap(pos, colors)
+
+    def reset(self):
+        # 清空曲线与图像
+        for h in self.pg_plot_dict.values():
+            if 'I' in h: h['I'].clear()
+            if 'Q' in h: h['Q'].clear()
+            if 'MAG' in h: h['MAG'].clear()
+        for iv in self.pg_img_dict.values():
+            iv.clear()
