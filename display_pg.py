@@ -1,4 +1,3 @@
-# display_pg.py
 from typing import Dict, Any, List
 from PyQt5.QtWidgets import QVBoxLayout, QWidget
 from PyQt5.QtCore import QRectF

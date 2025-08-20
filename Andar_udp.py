@@ -92,6 +92,8 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.frame_data_list = []
         self.rx_thread = None
         self.tx_sock   = None
+        self.save_filename = None
+        self.generate_unique_filename()
 
         self.last_display_time = time.time()# 记录最后显示的时间
         self.display_interval = 1.0
@@ -104,6 +106,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         fft1d_placeholders = {k: getattr(self, f'widget_{k}') for k in fft1d_keys}
         fft2d_placeholders = {k: getattr(self, f'widget_{k}') for k in fft2d_keys}
 
+        #GUI显示界面绑定实例化
         self.display = PgDisplay(
             adc_placeholders=adc_placeholders,
             fft1d_placeholders=fft1d_placeholders,
@@ -114,6 +117,10 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.bus.log.connect(self._log)
         self.bus.frame_ready.connect(self.on_frame_ready)
 
+    def generate_unique_filename(self):
+        """生成一个唯一的 .mat 文件名并保存为实例属性"""
+        timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        self.save_filename = f"{timestamp}_raw_data_py.mat"
 
     # ---- 重定向日志到 textEdit_log ----
     def _log(self, s: str):
@@ -161,7 +168,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         """
          # 保存到 .mat 文件
         if self.checkBox_IsSave.isChecked():
-            if not self.save_to_mat(frame,sample,chirp,"raw_data.mat"):
+            if not self.save_to_mat(frame,sample,chirp,self.save_filename):
                 #self.bus.log.emit("[OK] 原始数据已保存到 raw_data.mat")
                 self.bus.log.emit("[ERR] 保存原始数据失败")
 
@@ -184,10 +191,10 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
 
 
 # ================== 文件读取部分内容 ==================
-    def save_to_mat(self,frame_data, sample_number, chirp_number, filename="raw_data.mat"):
+    def save_to_mat(self,frame_data, sample_number, chirp_number, filename= None):
         try:
             # 获取当前时间戳，确保每一帧有唯一的变量名
-            timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S_%f")
+            timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 
             # 计算预期的数据大小：4通道，I/Q每个16bit，每个数据点2字节
             num_antennas = 4  # 4通道
@@ -234,10 +241,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
                     pass
 
                 scipy.io.savemat(filename, existing_data)
-
-
-            #print(f"数据成功保存到 {filename}，包含 {len(existing_data)} 帧数据")
-
+                #print(f"数据成功保存到 {filename}，包含 {len(existing_data)} 帧数据")
             return True
         except Exception as e:
             print(f"保存数据时出错: {e}")
