@@ -117,18 +117,12 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.bus.log.connect(self._log)
         self.bus.frame_ready.connect(self.on_frame_ready)
 
-        self.tableWidget_distance.setColumnCount(4)
-        header_labels = ['FFT', 'Macleod', 'CZT FFT Peak', 'CZT Macleod']
+        self.tableWidget_distance.setColumnCount(5)
+        header_labels = ['index','FFT', 'Macleod', 'CZT FFT Peak', 'CZT Macleod']
         self.tableWidget_distance.setHorizontalHeaderLabels(header_labels)
-
-        # 让表格内容不可编辑
         self.tableWidget_distance.setEditTriggers(QTableWidget.NoEditTriggers)
-
-        # *** 修改点 1: 设置列宽填充整个控件 ***
         # QHeaderView.Stretch 模式会使所有列等宽拉伸，填充可用空间。
         self.tableWidget_distance.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-
-        # 隐藏行号
         self.tableWidget_distance.verticalHeader().setVisible(False)
 
     def generate_unique_filename(self):
@@ -322,7 +316,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
 
         R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[0], chirp, sample)
         # 更新表格显示距离计算结果
-        row_data = [f"{R_fft:.4f} m",f"{R_macleod:.4f} m",f"{R_czt_fftpeak:.4f} m",f"{R_czt_macleod:.4f} m"]
+        row_data = [f"{self.current_index}",f"{R_fft:.4f} m",f"{R_macleod:.4f} m",f"{R_czt_fftpeak:.4f} m",f"{R_czt_macleod:.4f} m"]
         row_count = self.tableWidget_distance.rowCount()
         self.tableWidget_distance.insertRow(row_count)
         for i, value in enumerate(row_data):
@@ -343,6 +337,8 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.frame_data_list = []  # 清空数据
         self.current_index = 0  # 重置索引
         self.textEdit_log.clear()  # 清空日志
+        self.tableWidget_distance.clearContents()  # 清空表格内容
+        self.tableWidget_distance.setRowCount(0)
         self.display.reset()
         self.bus.log.emit("已关闭文件，清空数据")
 
