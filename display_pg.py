@@ -5,7 +5,7 @@ import pyqtgraph as pg
 from pyqtgraph import ImageView
 import numpy as np
 from PyQt5.QtGui import QPainterPath, QPen, QColor
-
+from collections import deque
 
 class PgDisplay:
     """
@@ -31,8 +31,9 @@ class PgDisplay:
         fft2d_placeholders: {'2DFFTtx0rx0': QWidget, ...}
         """
         pg.setConfigOptions(antialias=True)
-        self._r_buffer = []
-        self._theta_buffer = []
+        #maxlen=5 # 表示队列最大容量为5。当加入第6个元素时，最旧的元素会自动被移除。
+        self._r_buffer = deque(maxlen = 5)
+        self._theta_buffer = deque(maxlen = 5)
 
         self.pg_plot_dict: Dict[str, Dict[str, Any]] = {}  # ADC & 1DFFT 曲线
         self.pg_img_dict: Dict[str, ImageView] = {}        # 2DFFT 图像
@@ -116,33 +117,51 @@ class PgDisplay:
             view.invertY(False)
             view.autoRange()
 
-    def update_point_cloud_polar2(self, key: str,
-                                 r: np.ndarray,
-                                 theta_deg: np.ndarray,
+    def update_point_cloud_polar(self, key: str,
+                                 r: float, # 现在接受标量 float
+                                 theta_deg: float, # 现在接受标量 float
                                  *,
                                  size: float = 5.0,
                                  color='r'):
-        """ r-θ(度) -> 半圆散点 """
+        """
+        r-θ(度) -> 半圆散点
+        每次传入一个标量，内部暂存，当数量达到5个时再统一绘制
+        """
         if key not in self.pg_cloud_dict:
             return
 
         h = self.pg_cloud_dict[key]
-        theta = np.deg2rad(theta_deg)
-        mask = (r >= 0) & (r <= self._r_max) & \
-               (theta >= h['theta_min']) & (theta <= h['theta_max'])
-        if not np.any(mask):
-            h['scatter'].setData([])
+
+        # 1. 将新传入的标量数据添加到 deque
+        self._r_buffer.append(r)
+        self._theta_buffer.append(theta_deg)
+
+        # 2. 如果 deque 未满（即元素少于5个），则直接返回，不进行绘制
+        if len(self._r_buffer) < 5:
             return
 
-        rv = r[mask]
-        tv = theta[mask]
+        # 3. 如果 deque 已满，则将所有元素转换为 NumPy 数组进行绘制
+        r_array = np.array(self._r_buffer)
+        theta_deg_array = np.array(self._theta_buffer)
+
+        theta_rad = np.deg2rad(theta_deg_array)
+        mask = (r_array >= 0) & (r_array <= self._r_max) & \
+               (theta_rad >= h['theta_min']) & (theta_rad <= h['theta_max'])
+
+        if not np.any(mask):
+            h['scatter'].setData([])
+            # deque 会自动管理大小，无需手动清空
+            return
+
+        rv = r_array[mask]
+        tv = theta_rad[mask]
         x = rv * np.cos(tv)
         y = rv * np.sin(tv)
-        # 大点量建议：h['scatter'].setData(x=x, y=y, size=size, brush=color, pen=None)
-        spots = [{'pos': (x[i], y[i])} for i in range(len(x))]
-        h['scatter'].setData(spots, size=size, brush=color)
 
-    def update_point_cloud_polar(self, key: str,
+        # 4. 用所有缓存的数据点进行绘制
+        h['scatter'].setData(x=x, y=y, size=size, brush=color, pen=None)
+
+    def update_point_cloud_polar2(self, key: str,
                                  r: float, # 修改：现在接受标量 float
                                  theta_deg: float, # 修改：现在接受标量 float
                                  *,
