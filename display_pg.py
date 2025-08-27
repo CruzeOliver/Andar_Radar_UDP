@@ -21,8 +21,8 @@ class PgDisplay:
                  fft2d_placeholders: Dict[str, QWidget],
                  point_cloud_placeholders: Dict[str, QWidget],
                  *,
-                 r_max: float = 20.0,         # 最大量程 (距离)
-                 fov_deg: float = 120.0,      # 扇形角度（例如120°）
+                 r_max: float = 6.0,         # 最大量程 (距离)
+                 fov_deg: float = 180.0,      # 扇形角度（例如120°）
                  theta_center_deg: float = 90 # 半圆朝上
                  ):
         """
@@ -31,6 +31,8 @@ class PgDisplay:
         fft2d_placeholders: {'2DFFTtx0rx0': QWidget, ...}
         """
         pg.setConfigOptions(antialias=True)
+        self._r_buffer = []
+        self._theta_buffer = []
 
         self.pg_plot_dict: Dict[str, Dict[str, Any]] = {}  # ADC & 1DFFT 曲线
         self.pg_img_dict: Dict[str, ImageView] = {}        # 2DFFT 图像
@@ -114,7 +116,7 @@ class PgDisplay:
             view.invertY(False)
             view.autoRange()
 
-    def update_point_cloud_polar(self, key: str,
+    def update_point_cloud_polar2(self, key: str,
                                  r: np.ndarray,
                                  theta_deg: np.ndarray,
                                  *,
@@ -123,6 +125,7 @@ class PgDisplay:
         """ r-θ(度) -> 半圆散点 """
         if key not in self.pg_cloud_dict:
             return
+
         h = self.pg_cloud_dict[key]
         theta = np.deg2rad(theta_deg)
         mask = (r >= 0) & (r <= self._r_max) & \
@@ -131,13 +134,64 @@ class PgDisplay:
             h['scatter'].setData([])
             return
 
-        rv = r[mask]; tv = theta[mask]
-        x = rv * np.cos(tv); y = rv * np.sin(tv)
-
+        rv = r[mask]
+        tv = theta[mask]
+        x = rv * np.cos(tv)
+        y = rv * np.sin(tv)
         # 大点量建议：h['scatter'].setData(x=x, y=y, size=size, brush=color, pen=None)
         spots = [{'pos': (x[i], y[i])} for i in range(len(x))]
         h['scatter'].setData(spots, size=size, brush=color)
 
+    def update_point_cloud_polar(self, key: str,
+                                 r: float, # 修改：现在接受标量 float
+                                 theta_deg: float, # 修改：现在接受标量 float
+                                 *,
+                                 size: float = 5.0,
+                                 color='r'):
+        """
+        r-θ(度) -> 半圆散点
+        每次传入一个标量，内部暂存，当数量达到5个时再统一绘制
+        """
+        if key not in self.pg_cloud_dict:
+            return
+
+        h = self.pg_cloud_dict[key]
+
+        # 1. 将新传入的标量数据添加到缓冲区
+        self._r_buffer.append(r)
+        self._theta_buffer.append(theta_deg)
+
+        # 2. 如果缓冲区未满，则直接返回，不进行绘制
+        if len(self._r_buffer) < 5:
+             return
+
+        # 3. 如果缓冲区已满（达到5个），则进行绘制
+        # 将缓冲区列表转换为 NumPy 数组
+        r_array = np.array(self._r_buffer)
+        theta_deg_array = np.array(self._theta_buffer)
+
+        theta_rad = np.deg2rad(theta_deg_array)
+        mask = (r_array >= 0) & (r_array <= self._r_max) & \
+               (theta_rad >= h['theta_min']) & (theta_rad <= h['theta_max'])
+
+        if not np.any(mask):
+            h['scatter'].setData([])
+            # 清空缓冲区
+            self._r_buffer.clear()
+            self._theta_buffer.clear()
+            return
+
+        rv = r_array[mask]
+        tv = theta_rad[mask]
+        x = rv * np.cos(tv)
+        y = rv * np.sin(tv)
+
+        # 4. 用所有缓存的数据点进行绘制
+        h['scatter'].setData(x=x, y=y, size=size, brush=color, pen=None)
+
+        # 5. 绘制完成后，清空缓冲区
+        self._r_buffer.clear()
+        self._theta_buffer.clear()
     # -------------------- Private: Init Helpers --------------------
 
     def _set_plot_style(self, pw: pg.PlotWidget):
@@ -219,9 +273,9 @@ class PgDisplay:
         items = []
 
         # —— 同心弧线（半径刻度）——
-        n_rings = 4
+        n_rings = 6
         radii = np.linspace(r_max/n_rings, r_max, n_rings)
-        pen_ring = QPen(QColor(180, 180, 180))
+        pen_ring = QPen(QColor(255, 1, 1))
         pen_ring.setStyle(Qt.DashLine)
         pen_ring.setCosmetic(True)         # 线宽不随缩放变化
 
@@ -272,3 +326,5 @@ class PgDisplay:
             if 'MAG' in h: h['MAG'].clear()
         for iv in self.pg_img_dict.values():
             iv.clear()
+        for h in self.pg_cloud_dict.values():
+            h['scatter'].clear()

@@ -329,3 +329,80 @@ def calculate_distance_from_fft(fft_result_in, n_chirp, n_points):
     print(f"FFT Distance: {R_fft:.4f} m | Macleod: {R_macleod:.4f} m | CZT@peak: {R_czt_fftpeak:.4f} m | CZT@Macleod: {R_czt_macleod:.4f} m")
 
     return R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod
+
+def estimate_az_el_from_fft2d(fft2d_results):
+    """
+    根据 2D FFT 结果估计 水平角(az) 与 俯仰角(el)
+    - 使用全局变量 wavelength
+    - 阵列为 2x2 平面阵，虚拟天线排布：
+          [2 3]   (y=1)
+          [0 1]   (y=0)
+           x=0  x=1
+    - 阵元间距固定为 λ/2
+    - 自动选取能量最强的 (doppler, range) 点
+
+    参数
+    ----
+    fft2d_results : np.ndarray
+        形状 (4, n_chirp, n_range)，4 对应虚拟天线 [0,1,2,3]
+
+    返回
+    ----
+    az_deg : float
+        水平角（°）
+    el_deg : float
+        俯仰角（°）
+    (k_dop, k_rng) : tuple[int, int]
+        实际使用的 (doppler_idx, range_idx)
+    extra : dict
+        调试信息：相位差、空间正弦分量等
+    """
+    global wavelength
+    d_spacing = wavelength / 2.0
+
+    assert fft2d_results.ndim == 3 and fft2d_results.shape[0] == 4
+
+    # 1) 找全局最强点
+    power_sum = np.sum(np.abs(fft2d_results)**2, axis=0)  # (n_chirp, n_range)
+    k_dop, k_rng = np.unravel_index(np.argmax(power_sum), power_sum.shape)
+
+    # 2) 取该点 4 阵元复值
+    v0 = fft2d_results[0, k_dop, k_rng]  # (x=0, y=0)
+    v1 = fft2d_results[1, k_dop, k_rng]  # (x=1, y=0)
+    v2 = fft2d_results[2, k_dop, k_rng]  # (x=0, y=1)
+    v3 = fft2d_results[3, k_dop, k_rng]  # (x=1, y=1)
+
+    # 3) 相位差（相邻阵元，取平均）
+    dphi_x1 = np.angle(v1 * np.conj(v0))
+    dphi_x2 = np.angle(v3 * np.conj(v2))
+    dphi_x  = np.angle(np.mean(np.exp(1j * np.array([dphi_x1, dphi_x2]))))
+
+    dphi_y1 = np.angle(v2 * np.conj(v0))
+    dphi_y2 = np.angle(v3 * np.conj(v1))
+    dphi_y  = np.angle(np.mean(np.exp(1j * np.array([dphi_y1, dphi_y2]))))
+
+    # 4) 相位差转角度
+    coef = wavelength / (2.0 * np.pi * d_spacing)
+    s_x = coef * dphi_x  # = sin(az)*cos(el)
+    s_y = coef * dphi_y  # = sin(el)
+
+    s_y = float(np.clip(s_y, -0.999999, 0.999999))
+    el = np.arcsin(s_y)
+    cos_el = np.cos(el)
+    if abs(cos_el) < 1e-6:
+        cos_el = 1e-6
+    ratio = float(np.clip(s_x / cos_el, -0.999999, 0.999999))
+    az = np.arcsin(ratio)
+
+    az_deg = np.degrees(az)
+    el_deg = np.degrees(el)
+
+    extra = dict(
+        dphi_x=float(dphi_x),
+        dphi_y=float(dphi_y),
+        s_x=float(s_x),
+        s_y=float(s_y),
+        wavelength=wavelength,
+        d_spacing=d_spacing
+    )
+    return az_deg, el_deg, (int(k_dop), int(k_rng)), extra

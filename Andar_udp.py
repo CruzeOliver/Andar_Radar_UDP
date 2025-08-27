@@ -79,6 +79,12 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.setupUi(self)
         self.setWindowTitle("Radar UDP Interface")
         self.setWindowIcon(QIcon('Radar_UDP_icon.png'))
+        pixmap = QPixmap(r'CJLU_logo.png')
+        if pixmap.isNull():
+            QMessageBox.warning(self, "图像加载失败", "无法加载图像，请检查文件路径是否正确。")
+        else:
+            self.CJLU_logo_label.setPixmap(pixmap)
+            self.CJLU_logo_label.setScaledContents(True)
         self.setMinimumSize(1800, 1400)
 
         self.pushButton_Disconnect.setEnabled(False)
@@ -187,6 +193,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         iq = reorder_frame(frame, chirp, sample)
         self.fft_results_1D = Perform1D_FFT(iq)
         self.fft_result_2D = Perform2D_FFT(self.fft_results_1D)
+
         # 判断是否满足显示间隔
         if current_time - self.last_display_time > self.display_interval:
             self.display.update_adc4(iq, chirp, sample)
@@ -197,7 +204,9 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             self.last_display_time = current_time
         else:
             pass
-        #R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[0], chirp, sample)
+        R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[0], chirp, sample)
+        az, el, idx, info = estimate_az_el_from_fft2d(self.fft_result_2D)
+        self.display.update_point_cloud_polar("PointCloud", R_macleod, 90.0-az, size=10.0, color='g')
         #self.bus.log.emit(f"距离计算结果：FFT={R_fft:.2f} m, Macleod={R_macleod:.2f} m, CZT FFT Peak={R_czt_fftpeak:.2f} m, CZT Macleod={R_czt_macleod:.2f} m")
 
 
@@ -327,9 +336,13 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             item.setTextAlignment(Qt.AlignCenter)# 设置单元格居中对齐
             self.tableWidget_distance.setItem(row_count, i, item)
         self.tableWidget_distance.scrollToBottom()# 滚动到底部
-        # ranges = np.array([3.2, 7.5, 12.1])
-        # angles_deg = np.array([60.0, 90.0, 120.0])
-        # self.display.update_point_cloud_polar("PointCloud", ranges, angles_deg, size=10.0, color='g')
+
+        az, el, idx, info = estimate_az_el_from_fft2d(self.fft_result_2D)
+        #self.bus.log.emit(f"方位角={az:.2f}°, 俯仰角={el:.2f}° @ bin={idx}")
+        # 将标量转换为 NumPy 数组
+        #r_data = np.array([R_macleod])
+        #az_data = np.array([90.0-az])
+        self.display.update_point_cloud_polar("PointCloud", R_macleod, 90.0-az, size=10.0, color='g')
 
     def ShowNextFrame(self):
         if self.current_index < len(self.frame_data_list) - 1:
