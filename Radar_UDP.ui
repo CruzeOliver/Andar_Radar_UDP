@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>675</width>
-    <height>616</height>
+    <height>599</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -44,7 +44,7 @@
        </font>
       </property>
       <property name="currentIndex">
-       <number>3</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="tab_ADC">
        <attribute name="title">
@@ -449,7 +449,7 @@
        </font>
       </property>
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="tab_log">
        <attribute name="title">

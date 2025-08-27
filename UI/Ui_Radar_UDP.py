@@ -14,7 +14,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(675, 616)
+        MainWindow.resize(675, 599)
         MainWindow.setLayoutDirection(QtCore.Qt.LeftToRight)
         MainWindow.setAutoFillBackground(True)
         self.centralwidget = QtWidgets.QWidget(MainWindow)
@@ -293,8 +293,8 @@ class Ui_MainWindow(object):
         MainWindow.setStatusBar(self.statusbar)
 
         self.retranslateUi(MainWindow)
-        self.tabWidget_Display.setCurrentIndex(3)
-        self.tabWidget_Message.setCurrentIndex(1)
+        self.tabWidget_Display.setCurrentIndex(0)
+        self.tabWidget_Message.setCurrentIndex(0)
         self.pushButton_Connect.clicked.connect(MainWindow.UDP_connect) # type: ignore
         self.pushButton_Disconnect.clicked.connect(MainWindow.UDP_disconnect) # type: ignore
         self.pushButton_ReadFile.clicked.connect(MainWindow.ReadFile) # type: ignore

@@ -101,16 +101,19 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         adc4_keys  = ['tx0rx0', 'tx0rx1', 'tx1rx0', 'tx1rx1']
         fft1d_keys = ['1DFFTtx0rx0', '1DFFTtx0rx1', '1DFFTtx1rx0', '1DFFTtx1rx1']
         fft2d_keys = ['2DFFTtx0rx0', '2DFFTtx0rx1', '2DFFTtx1rx0', '2DFFTtx1rx1']
+        point_cloud_keys = ['PointCloud']
 
         adc_placeholders = {k: getattr(self, f'widget_{k}') for k in adc4_keys}
         fft1d_placeholders = {k: getattr(self, f'widget_{k}') for k in fft1d_keys}
         fft2d_placeholders = {k: getattr(self, f'widget_{k}') for k in fft2d_keys}
+        point_cloud_placeholders = {k: getattr(self, f'widget_{k}') for k in point_cloud_keys}
 
         #GUI显示界面绑定实例化
         self.display = PgDisplay(
             adc_placeholders=adc_placeholders,
             fft1d_placeholders=fft1d_placeholders,
-            fft2d_placeholders=fft2d_placeholders
+            fft2d_placeholders=fft2d_placeholders,
+            point_cloud_placeholders=point_cloud_placeholders
         )
 
         self.bus = Bus()
@@ -324,6 +327,9 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             item.setTextAlignment(Qt.AlignCenter)# 设置单元格居中对齐
             self.tableWidget_distance.setItem(row_count, i, item)
         self.tableWidget_distance.scrollToBottom()# 滚动到底部
+        # ranges = np.array([3.2, 7.5, 12.1])
+        # angles_deg = np.array([60.0, 90.0, 120.0])
+        # self.display.update_point_cloud_polar("PointCloud", ranges, angles_deg, size=10.0, color='g')
 
     def ShowNextFrame(self):
         if self.current_index < len(self.frame_data_list) - 1:
