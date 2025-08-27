@@ -167,7 +167,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.pushButton_Connect.setEnabled(True)
         self.pushButton_Disconnect.setEnabled(False)
         if self.checkBox_IsSave.isChecked():
-            self.bus.log.emit("[OK] 原始数据保存至f{self.save_filename}，请在文件夹中查看")
+            self.bus.log.emit(f"[OK] 原始数据保存至{self.save_filename}，请在文件夹中查看")
 
     # ---- 整帧到达回调函数 ----
     def on_frame_ready(self, frame: bytes, sample: int, chirp: int, txrx: int):

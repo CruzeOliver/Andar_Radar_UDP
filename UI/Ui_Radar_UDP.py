@@ -110,6 +110,14 @@ class Ui_MainWindow(object):
         self.widget_2DFFTtx1rx1.setObjectName("widget_2DFFTtx1rx1")
         self.gridLayout_4.addWidget(self.widget_2DFFTtx1rx1, 1, 1, 1, 1)
         self.tabWidget_Display.addTab(self.tab_2DFFT, "")
+        self.tab_PoitCloud = QtWidgets.QWidget()
+        self.tab_PoitCloud.setObjectName("tab_PoitCloud")
+        self.horizontalLayout_3 = QtWidgets.QHBoxLayout(self.tab_PoitCloud)
+        self.horizontalLayout_3.setObjectName("horizontalLayout_3")
+        self.widget_PointCloud = QtWidgets.QWidget(self.tab_PoitCloud)
+        self.widget_PointCloud.setObjectName("widget_PointCloud")
+        self.horizontalLayout_3.addWidget(self.widget_PointCloud)
+        self.tabWidget_Display.addTab(self.tab_PoitCloud, "")
         self.gridLayout.addWidget(self.tabWidget_Display, 0, 0, 1, 1)
         self.groupBox_2 = QtWidgets.QGroupBox(self.centralwidget)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
@@ -285,7 +293,7 @@ class Ui_MainWindow(object):
         MainWindow.setStatusBar(self.statusbar)
 
         self.retranslateUi(MainWindow)
-        self.tabWidget_Display.setCurrentIndex(0)
+        self.tabWidget_Display.setCurrentIndex(3)
         self.tabWidget_Message.setCurrentIndex(1)
         self.pushButton_Connect.clicked.connect(MainWindow.UDP_connect) # type: ignore
         self.pushButton_Disconnect.clicked.connect(MainWindow.UDP_disconnect) # type: ignore
@@ -300,6 +308,7 @@ class Ui_MainWindow(object):
         self.tabWidget_Display.setTabText(self.tabWidget_Display.indexOf(self.tab_ADC), _translate("MainWindow", "ADC-T2R2"))
         self.tabWidget_Display.setTabText(self.tabWidget_Display.indexOf(self.tab_1DFFT), _translate("MainWindow", "1D_FFT_T2R2"))
         self.tabWidget_Display.setTabText(self.tabWidget_Display.indexOf(self.tab_2DFFT), _translate("MainWindow", "2D_FFT_T2R2"))
+        self.tabWidget_Display.setTabText(self.tabWidget_Display.indexOf(self.tab_PoitCloud), _translate("MainWindow", "Point Cloud"))
         self.groupBox_2.setTitle(_translate("MainWindow", "UDP_config"))
         self.CJLU_logo_label.setText(_translate("MainWindow", "CJLU_logo"))
         self.pushButton_Connect.setText(_translate("MainWindow", "Connect"))

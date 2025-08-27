@@ -44,7 +44,7 @@
        </font>
       </property>
       <property name="currentIndex">
-       <number>0</number>
+       <number>3</number>
       </property>
       <widget class="QWidget" name="tab_ADC">
        <attribute name="title">
@@ -134,6 +134,16 @@
         </item>
         <item row="1" column="1">
          <widget class="QWidget" name="widget_2DFFTtx1rx1" native="true"/>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="tab_PoitCloud">
+       <attribute name="title">
+        <string>Point Cloud</string>
+       </attribute>
+       <layout class="QHBoxLayout" name="horizontalLayout_3">
+        <item>
+         <widget class="QWidget" name="widget_PointCloud" native="true"/>
         </item>
        </layout>
       </widget>

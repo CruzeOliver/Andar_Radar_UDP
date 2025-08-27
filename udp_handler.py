@@ -17,7 +17,7 @@ from Andar_udp import Bus
     ChirpNum : 下位机配置信息（例：64）
     Sample_POINT : 下位机配置信息（例：128）
     TXRXTYPE : 下位机配置信息（例：1）
-    仅有三种模式：TX1RX1（1）、TX1RX2（2）、TX2RX2（4）  Python GUI 目前只接受TX2RX2（4）模式
+    仅有三种模式：TX1RX1（1）、TX1RX2（2）、TX2RX2（4）  Python GUI 目前只接受TX2RX2模式
 
 
     Other Frame（1024byte）：纯ADC数据
