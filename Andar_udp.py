@@ -54,7 +54,6 @@ class UdpRxThread(threading.Thread):
             if res is not None:
                 frame, sample, chirp, txrx = res
                 self.bus.frame_ready.emit(frame, sample, chirp, txrx)
-
         try:
             if self._sock:
                 self._sock.close()
@@ -116,10 +115,10 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
 
         #GUI显示界面绑定实例化
         self.display = PgDisplay(
-            adc_placeholders=adc_placeholders,
-            fft1d_placeholders=fft1d_placeholders,
-            fft2d_placeholders=fft2d_placeholders,
-            point_cloud_placeholders=point_cloud_placeholders
+            adc_placeholders   = adc_placeholders,
+            fft1d_placeholders = fft1d_placeholders,
+            fft2d_placeholders = fft2d_placeholders,
+            point_cloud_placeholders = point_cloud_placeholders
         )
 
         self.bus = Bus()
@@ -259,7 +258,6 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
                     warnings.simplefilter("ignore", category=MatWriteWarning)
                 except ImportError:
                     pass
-
                 scipy.io.savemat(filename, existing_data)
                 #print(f"数据成功保存到 {filename}，包含 {len(existing_data)} 帧数据")
             return True
@@ -286,7 +284,6 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             self.frame_all_data = data
 
             self.bus.log.emit(f"读取文件：{filename}")# 打印文件中包含的变量
-            #print(f"文件中包含的变量：{list(data.keys())}")
 
             # 获取所有包含帧数据的变量（以 "frame" 开头的变量名）
             self.frame_data_list = [key for key in data.keys() if key.startswith('frame')]
