@@ -107,18 +107,21 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         fft1d_keys = ['1DFFTtx0rx0', '1DFFTtx0rx1', '1DFFTtx1rx0', '1DFFTtx1rx1']
         fft2d_keys = ['2DFFTtx0rx0', '2DFFTtx0rx1', '2DFFTtx1rx0', '2DFFTtx1rx1']
         point_cloud_keys = ['PointCloud']
+        ConstellationDiagram_keys = ['CDtx0rx0', 'CDtx0rx1', 'CDtx1rx0', 'CDtx1rx1']
 
         adc_placeholders = {k: getattr(self, f'widget_{k}') for k in adc4_keys}
         fft1d_placeholders = {k: getattr(self, f'widget_{k}') for k in fft1d_keys}
         fft2d_placeholders = {k: getattr(self, f'widget_{k}') for k in fft2d_keys}
         point_cloud_placeholders = {k: getattr(self, f'widget_{k}') for k in point_cloud_keys}
+        constellation_placeholders = {k: getattr(self, f'widget_{k}') for k in ConstellationDiagram_keys}
 
         #GUI显示界面绑定实例化
         self.display = PgDisplay(
             adc_placeholders   = adc_placeholders,
             fft1d_placeholders = fft1d_placeholders,
             fft2d_placeholders = fft2d_placeholders,
-            point_cloud_placeholders = point_cloud_placeholders
+            point_cloud_placeholders = point_cloud_placeholders,
+            constellation_placeholders = constellation_placeholders
         )
 
         self.bus = Bus()
@@ -196,6 +199,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         # 判断是否满足显示间隔
         if current_time - self.last_display_time > self.display_interval:
             self.display.update_adc4(iq, chirp, sample)
+            self.display.update_constellations_all(iq, max_points=3000, remove_dc=True)
             if self.checkBox_1dfft.isChecked():
                 self.display.update_fft1d(self.fft_results_1D, sample)
             if self.checkBox_2dfft.isChecked():
@@ -315,6 +319,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
 
         iq = reorder_frame(frame_data_flat, int(chirp), int(sample))
         self.display.update_adc4(iq, chirp, sample)
+        self.display.update_constellations_all(iq, max_points=3000, remove_dc=True)
         self.fft_results_1D = Perform1D_FFT(iq)
         self.fft_result_2D  = Perform2D_FFT(self.fft_results_1D)
 

@@ -96,6 +96,25 @@
         </item>
        </layout>
       </widget>
+      <widget class="QWidget" name="tab_ConstellationDiagram">
+       <attribute name="title">
+        <string>ConstellationDiagram</string>
+       </attribute>
+       <layout class="QGridLayout" name="gridLayout_6">
+        <item row="0" column="0">
+         <widget class="QWidget" name="widget_CDtx0rx0" native="true"/>
+        </item>
+        <item row="0" column="1">
+         <widget class="QWidget" name="widget_CDtx0rx1" native="true"/>
+        </item>
+        <item row="1" column="0">
+         <widget class="QWidget" name="widget_CDtx1rx0" native="true"/>
+        </item>
+        <item row="1" column="1">
+         <widget class="QWidget" name="widget_CDtx1rx1" native="true"/>
+        </item>
+       </layout>
+      </widget>
       <widget class="QWidget" name="tab_1DFFT">
        <property name="minimumSize">
         <size>
