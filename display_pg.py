@@ -4,7 +4,7 @@ from PyQt5.QtCore import QRectF,Qt
 import pyqtgraph as pg
 from pyqtgraph import ImageView
 import numpy as np
-from PyQt5.QtGui import QPainterPath, QPen, QColor
+from PyQt5.QtGui import QPainterPath, QPen, QColor, QTransform
 from collections import deque
 
 class PgDisplay:
@@ -43,17 +43,18 @@ class PgDisplay:
         self.pg_const_dict: Dict[str, Dict[str, Any]] = {} # Constellation Diagram 图像
         self.pg_amp_phase_dict: Dict[str, Dict[str, Any]] = {} # Amp-Phase 图像
 
-        self._colormap = self._build_jet_colormap()
-        self._r_max = float(r_max)
-        self._theta_center = np.deg2rad(theta_center_deg)
-        self._fov = np.deg2rad(fov_deg)
-        self._init_point_cloud_semicircle(point_cloud_placeholders)
-
         self._init_adc(adc_placeholders)
         self._init_constellation_placeholders(constellation_placeholders)
         self._init_amp_phase(amp_phase_placeholders)
         self._init_fft1d(fft1d_placeholders)
+
+        self._colormap = self._build_jet_colormap()
         self._init_fft2d(fft2d_placeholders)
+
+        self._r_max = float(r_max)
+        self._theta_center = np.deg2rad(theta_center_deg)
+        self._fov = np.deg2rad(fov_deg)
+        self._init_point_cloud_semicircle(point_cloud_placeholders)
 
 
 
@@ -74,94 +75,6 @@ class PgDisplay:
             h['I'].setData(t, I)
             h['Q'].setData(t, Q)
             h['pw'].setXRange(0, sample, padding=0.02)
-
-    def update_constellation2(self,
-                         key: str,
-                         iq_chan: np.ndarray,
-                         *,
-                         max_points: int = 4000,
-                         remove_dc: bool = True,
-                         set_ref_circle: bool = True,
-                         autorange: bool = True):
-
-        # 1) 取句柄
-        if key not in getattr(self, 'pg_const_dict', {}):
-            return
-        h = self.pg_const_dict[key]
-
-        # 2) 拉平数据，并把 NaN/Inf 变成 0
-        z = np.asarray(iq_chan, dtype=np.complex64).ravel()
-        if z.size == 0:
-            h['scatter'].setData(x=[], y=[])
-            h['unit_circle'].setData([], [])
-            return
-
-        # 3) 去直流
-        if remove_dc:
-            z = z - np.nanmean(z)
-
-        # 4) 限制点数，避免卡顿
-        N = z.size
-        if N > max_points:
-            step = max(1, N // max_points)
-            z = z[::step]
-
-        # 5) 绘制散点和参考圆（将无效值处理和绘图逻辑结合）
-        z_clean = np.nan_to_num(z, nan=0.0, posinf=0.0, neginf=0.0)
-        I = np.real(z_clean)
-        Q = np.imag(z_clean)
-
-        # 6) 更新散点
-        h['scatter'].setData(
-            x=I, y=Q,
-            pen=None,
-            brush=h['scatter'].opts.get('brush'),
-            size=h['scatter'].opts.get('size', 3)
-        )
-
-        # 7) 参考圆：用 RMS 半径，做有限值保护
-        if set_ref_circle and z_clean.size > 0:
-            R = float(np.sqrt(np.mean(I*I + Q*Q)))
-            if (not np.isfinite(R)) or R < 1e-9:
-                R = 1.0
-            t = np.linspace(0, 2 * np.pi, 361, dtype=np.float32)
-            h['unit_circle'].setData(R * np.cos(t), R * np.sin(t))
-        else:
-            h['unit_circle'].setData([], [])
-
-        # 8) 自动坐标范围（防 NaN/Inf 溢出）
-        if autorange and z_clean.size > 0:
-            r = float(np.nanmax(np.abs(z_clean)))
-            if (not np.isfinite(r)) or r < 1e-9:
-                r = 1.0
-            pad = 0.1 * r
-            try:
-                h['pw'].setRange(
-                    xRange=(-r - pad, r + pad),
-                    yRange=(-r - pad, r + pad),
-                    padding=0.0
-                )
-            except Exception:
-                h['pw'].setRange(xRange=(-1.0, 1.0), yRange=(-1.0, 1.0), padding=0.0)
-
-    def update_constellations_all2(self,
-                                iq: np.ndarray,
-                                *,
-                                key_map: dict = None,
-                                **kwargs):
-        assert iq.ndim == 3 and iq.shape[0] == 4, "iq 形状必须是 (4, chirp, sample)"
-        if key_map is None:
-            key_map = {
-                'CDtx0rx0': 0,
-                'CDtx0rx1': 1,
-                'CDtx1rx0': 2,
-                'CDtx1rx1': 3,
-            }
-        for k, idx in key_map.items():
-            if k in getattr(self, 'pg_const_dict', {}):
-                self.update_constellation(k, iq[idx], **kwargs)
-
-
 
     def update_constellation(self,
                         key: str,
@@ -634,7 +547,7 @@ class PgDisplay:
         radii = np.linspace(r_max/n_rings, r_max, n_rings)
         pen_ring = QPen(QColor(255, 1, 1))
         pen_ring.setStyle(Qt.DashLine)
-        pen_ring.setCosmetic(True)         # 线宽不随缩放变化
+        pen_ring.setCosmetic(True)
 
         for r in radii:
             path = QPainterPath()
@@ -649,19 +562,38 @@ class PgDisplay:
             items.append(item)
 
         # —— 方位射线（角度刻度）——
-        n_rays = 5
-        thetas_ray = np.linspace(theta_min, theta_max, n_rays)
-        pen_ray = QPen(QColor(180, 180, 180))
+        # 生成 0° 到 180° 的角度，用于绘制射线
+        theta_min_deg = np.rad2deg(theta_min)
+        theta_max_deg = np.rad2deg(theta_max)
+        thetas_ray_deg = np.arange(theta_min_deg, theta_max_deg + 1, 10)
+        thetas_ray_rad = np.deg2rad(thetas_ray_deg)
+
+        pen_ray = QPen(QColor(1, 1, 255))
         pen_ray.setStyle(Qt.DotLine)
         pen_ray.setCosmetic(True)
 
-        for th in thetas_ray:
+        for th_deg, th_rad in zip(thetas_ray_deg, thetas_ray_rad):
+            # 绘制射线
             path = QPainterPath()
             path.moveTo(0, 0)
-            path.lineTo(r_max * np.cos(th), r_max * np.sin(th))
+            path.lineTo(r_max * np.cos(th_rad), r_max * np.sin(th_rad))
             item = QGraphicsPathItem(path)
             item.setPen(pen_ray)
             items.append(item)
+
+            # 绘制角度标签
+            # 标签的角度从 0° 到 180° 映射到 90° 到 -90° （逆时针旋转）
+            label_deg = 90 - th_deg
+
+            # 将文本放置在最外圈，距离中心点 r_max 的 1.1 倍处
+            text_x = r_max * 1.1 * np.cos(th_rad)
+            text_y = r_max * 1.1 * np.sin(th_rad)
+
+            text_item = pg.TextItem(text=f"{label_deg:.0f}°", color=(0, 0, 0))
+            # 旋转文本以适应射线方向
+            text_item.setTransform(QTransform().rotate(th_deg))
+            text_item.setPos(text_x, text_y)
+            items.append(text_item)
 
         return items
 
