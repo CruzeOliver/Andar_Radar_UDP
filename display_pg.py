@@ -71,14 +71,103 @@ class PgDisplay:
             h['Q'].setData(t, Q)
             h['pw'].setXRange(0, sample, padding=0.02)
 
+    def update_constellation2(self,
+                         key: str,
+                         iq_chan: np.ndarray,
+                         *,
+                         max_points: int = 4000,
+                         remove_dc: bool = True,
+                         set_ref_circle: bool = True,
+                         autorange: bool = True):
+
+        # 1) 取句柄
+        if key not in getattr(self, 'pg_const_dict', {}):
+            return
+        h = self.pg_const_dict[key]
+
+        # 2) 拉平数据，并把 NaN/Inf 变成 0
+        z = np.asarray(iq_chan, dtype=np.complex64).ravel()
+        if z.size == 0:
+            h['scatter'].setData(x=[], y=[])
+            h['unit_circle'].setData([], [])
+            return
+
+        # 3) 去直流
+        if remove_dc:
+            z = z - np.nanmean(z)
+
+        # 4) 限制点数，避免卡顿
+        N = z.size
+        if N > max_points:
+            step = max(1, N // max_points)
+            z = z[::step]
+
+        # 5) 绘制散点和参考圆（将无效值处理和绘图逻辑结合）
+        z_clean = np.nan_to_num(z, nan=0.0, posinf=0.0, neginf=0.0)
+        I = np.real(z_clean)
+        Q = np.imag(z_clean)
+
+        # 6) 更新散点
+        h['scatter'].setData(
+            x=I, y=Q,
+            pen=None,
+            brush=h['scatter'].opts.get('brush'),
+            size=h['scatter'].opts.get('size', 3)
+        )
+
+        # 7) 参考圆：用 RMS 半径，做有限值保护
+        if set_ref_circle and z_clean.size > 0:
+            R = float(np.sqrt(np.mean(I*I + Q*Q)))
+            if (not np.isfinite(R)) or R < 1e-9:
+                R = 1.0
+            t = np.linspace(0, 2 * np.pi, 361, dtype=np.float32)
+            h['unit_circle'].setData(R * np.cos(t), R * np.sin(t))
+        else:
+            h['unit_circle'].setData([], [])
+
+        # 8) 自动坐标范围（防 NaN/Inf 溢出）
+        if autorange and z_clean.size > 0:
+            r = float(np.nanmax(np.abs(z_clean)))
+            if (not np.isfinite(r)) or r < 1e-9:
+                r = 1.0
+            pad = 0.1 * r
+            try:
+                h['pw'].setRange(
+                    xRange=(-r - pad, r + pad),
+                    yRange=(-r - pad, r + pad),
+                    padding=0.0
+                )
+            except Exception:
+                h['pw'].setRange(xRange=(-1.0, 1.0), yRange=(-1.0, 1.0), padding=0.0)
+
+    def update_constellations_all2(self,
+                                iq: np.ndarray,
+                                *,
+                                key_map: dict = None,
+                                **kwargs):
+        assert iq.ndim == 3 and iq.shape[0] == 4, "iq 形状必须是 (4, chirp, sample)"
+        if key_map is None:
+            key_map = {
+                'CDtx0rx0': 0,
+                'CDtx0rx1': 1,
+                'CDtx1rx0': 2,
+                'CDtx1rx1': 3,
+            }
+        for k, idx in key_map.items():
+            if k in getattr(self, 'pg_const_dict', {}):
+                self.update_constellation(k, iq[idx], **kwargs)
+
+
+
     def update_constellation(self,
-                    key: str,
-                    iq_chan: np.ndarray,
-                    *,
-                    max_points: int = 4000,
-                    remove_dc: bool = True,
-                    set_ref_circle: bool = True,
-                    autorange: bool = True):
+                        key: str,
+                        iq_chan: np.ndarray,
+                        *,
+                        max_points: int = 4000,
+                        remove_dc: bool = True,
+                        set_ref_circle: bool = True,
+                        autorange: bool = True,
+                        mode: str = "all_samples"):
         """
         更新并绘制单路星座图 (I/Q 散点)。
 
@@ -97,45 +186,48 @@ class PgDisplay:
             是否绘制参考圆。半径取 I/Q 均方根值 (RMS)，用于参考调制幅度。
         autorange : bool, 默认 True
             是否自动调整坐标范围，使散点和参考圆始终居中可见。
+        mode : str, 默认 "all_samples"
+        - "all_samples" : 使用所有采样点（默认，显示为圆环）
+        - "per_chirp"   : 每个 chirp 只取一个点（第0号采样点）
+        - "decimate:N"  : 每 N 个采样点抽取一个，例如 "decimate:16"
         """
-        # 1) 取句柄
         if key not in getattr(self, 'pg_const_dict', {}):
             return
         h = self.pg_const_dict[key]
 
-        # 2) 拉平数据 & 去直流
-        z = np.asarray(iq_chan, dtype=np.complex64).ravel()
+        # --- 选择采样模式 ---
+        if mode == "per_chirp" and iq_chan.ndim == 2:
+            # 每个 chirp 取一个点（这里选第0个样点，可以换成 sample//2）
+            z = iq_chan[:, 0]
+        else:
+            # 拉平
+            z = np.asarray(iq_chan, dtype=np.complex64).ravel()
+            if mode.startswith("decimate:"):
+                try:
+                    N = int(mode.split(":")[1])
+                    if N > 1:
+                        z = z[::N]
+                except Exception:
+                    pass
+            elif z.size > max_points:
+                step = max(1, z.size // max_points)
+                z = z[::step]
+
         if z.size == 0:
             h['scatter'].setData(x=[], y=[])
             h['unit_circle'].setData([], [])
             return
+
+        # 去直流
         if remove_dc:
-            # 用有限值平均；避免全 NaN 导致 mean=NaN
-            m = np.nanmean(z)
-            if np.isfinite(m):
-                z = z - m
+            z = z - np.nanmean(z)
 
-        # 3) 限制点数，避免卡顿
-        N = z.size
-        if N > max_points:
-            step = max(1, N // max_points)
-            z = z[::step]
+        # 清洗无效值
+        z_clean = np.nan_to_num(z, nan=0.0, posinf=0.0, neginf=0.0)
+        I = np.real(z_clean)
+        Q = np.imag(z_clean)
 
-        # 4) I/Q 清洗：把 NaN/Inf 变成 0，防止 setRange 溢出
-        I = np.nan_to_num(np.real(z), nan=0.0, posinf=0.0, neginf=0.0)
-        Q = np.nan_to_num(np.imag(z), nan=0.0, posinf=0.0, neginf=0.0)
-
-        # 5) 参考圆：用 RMS 半径，做有限值保护
-        if set_ref_circle and I.size > 0:
-            R = float(np.sqrt(np.nanmean(I*I + Q*Q)))
-            if (not np.isfinite(R)) or R < 1e-9:
-                R = 1.0
-            t = np.linspace(0, 2*np.pi, 361, dtype=np.float32)
-            h['unit_circle'].setData(R*np.cos(t), R*np.sin(t))
-        else:
-            h['unit_circle'].setData([], [])
-
-        # 6) 更新散点
+        # 更新散点
         h['scatter'].setData(
             x=I, y=Q,
             pen=None,
@@ -143,11 +235,19 @@ class PgDisplay:
             size=h['scatter'].opts.get('size', 3)
         )
 
-        # 7) 自动坐标范围（防 NaN/Inf 溢出）
-        if autorange and I.size > 0 and Q.size > 0:
-            rI = float(np.nanmax(np.abs(I)))
-            rQ = float(np.nanmax(np.abs(Q)))
-            r = max(rI, rQ)
+        # 参考圆
+        if set_ref_circle and z_clean.size > 0:
+            R = float(np.sqrt(np.mean(I*I + Q*Q)))
+            if (not np.isfinite(R)) or R < 1e-9:
+                R = 1.0
+            t = np.linspace(0, 2 * np.pi, 361, dtype=np.float32)
+            h['unit_circle'].setData(R * np.cos(t), R * np.sin(t))
+        else:
+            h['unit_circle'].setData([], [])
+
+        # 自动缩放
+        if autorange and z_clean.size > 0:
+            r = float(np.nanmax(np.abs(z_clean)))
             if (not np.isfinite(r)) or r < 1e-9:
                 r = 1.0
             pad = 0.1 * r
@@ -158,13 +258,19 @@ class PgDisplay:
                     padding=0.0
                 )
             except Exception:
-                h['pw'].setRange(xRange=(-1.0, 1.0), yRange=(-1.0, 1.0), padding=0.0)
+                h['pw'].setRange(xRange=(-1.0, 1.0),
+                                yRange=(-1.0, 1.0),
+                                padding=0.0)
 
     def update_constellations_all(self,
-                                iq: np.ndarray,
-                                *,
-                                key_map: dict = None,
-                                **kwargs):
+                            iq: np.ndarray,
+                            *,
+                            key_map: dict = None,
+                            mode: str = "all_samples",
+                            **kwargs):
+        """
+        批量更新四路星座图。
+        """
         assert iq.ndim == 3 and iq.shape[0] == 4, "iq 形状必须是 (4, chirp, sample)"
         if key_map is None:
             key_map = {
@@ -175,7 +281,9 @@ class PgDisplay:
             }
         for k, idx in key_map.items():
             if k in getattr(self, 'pg_const_dict', {}):
-                self.update_constellation(k, iq[idx], **kwargs)
+                self.update_constellation(k, iq[idx], mode=mode, **kwargs)
+
+
 
 
     def update_fft1d(self, fft_results_in: np.ndarray, sample: int):
@@ -260,8 +368,7 @@ class PgDisplay:
                (theta_rad >= h['theta_min']) & (theta_rad <= h['theta_max'])
 
         if not np.any(mask):
-            h['scatter'].setData([])
-            # deque 会自动管理大小，无需手动清空
+            h['scatter'].setData([])# deque 会自动管理大小，无需手动清空
             return
 
         rv = r_array[mask]
@@ -272,56 +379,7 @@ class PgDisplay:
         # 4. 用所有缓存的数据点进行绘制
         h['scatter'].setData(x=x, y=y, size=size, brush=color, pen=None)
 
-    def update_point_cloud_polar2(self, key: str,
-                                 r: float, # 修改：现在接受标量 float
-                                 theta_deg: float, # 修改：现在接受标量 float
-                                 *,
-                                 size: float = 5.0,
-                                 color='r'):
-        """
-        r-θ(度) -> 半圆散点
-        每次传入一个标量，内部暂存，当数量达到5个时再统一绘制
-        """
-        if key not in self.pg_cloud_dict:
-            return
 
-        h = self.pg_cloud_dict[key]
-
-        # 1. 将新传入的标量数据添加到缓冲区
-        self._r_buffer.append(r)
-        self._theta_buffer.append(theta_deg)
-
-        # 2. 如果缓冲区未满，则直接返回，不进行绘制
-        if len(self._r_buffer) < 5:
-             return
-
-        # 3. 如果缓冲区已满（达到5个），则进行绘制
-        # 将缓冲区列表转换为 NumPy 数组
-        r_array = np.array(self._r_buffer)
-        theta_deg_array = np.array(self._theta_buffer)
-
-        theta_rad = np.deg2rad(theta_deg_array)
-        mask = (r_array >= 0) & (r_array <= self._r_max) & \
-               (theta_rad >= h['theta_min']) & (theta_rad <= h['theta_max'])
-
-        if not np.any(mask):
-            h['scatter'].setData([])
-            # 清空缓冲区
-            self._r_buffer.clear()
-            self._theta_buffer.clear()
-            return
-
-        rv = r_array[mask]
-        tv = theta_rad[mask]
-        x = rv * np.cos(tv)
-        y = rv * np.sin(tv)
-
-        # 4. 用所有缓存的数据点进行绘制
-        h['scatter'].setData(x=x, y=y, size=size, brush=color, pen=None)
-
-        # 5. 绘制完成后，清空缓冲区
-        self._r_buffer.clear()
-        self._theta_buffer.clear()
     # -------------------- Private: Init Helpers --------------------
 
     def _set_plot_style(self, pw: pg.PlotWidget):
@@ -488,3 +546,6 @@ class PgDisplay:
             iv.clear()
         for h in self.pg_cloud_dict.values():
             h['scatter'].clear()
+        for h in self.pg_const_dict.values():
+            h['scatter'].clear()
+            h['unit_circle'].clear()
