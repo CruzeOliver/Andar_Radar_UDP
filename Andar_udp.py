@@ -98,6 +98,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.rx_thread = None
         self.tx_sock   = None
         self.save_filename = None
+        self.current_index = 0
         self.generate_unique_filename()
 
         self.last_display_time = time.time()# 记录最后显示的时间
@@ -131,8 +132,8 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.bus.log.connect(self._log)
         self.bus.frame_ready.connect(self.on_frame_ready)
 
-        self.tableWidget_distance.setColumnCount(5)
-        header_labels = ['index','FFT', 'Macleod', 'CZT FFT Peak', 'CZT Macleod']
+        self.tableWidget_distance.setColumnCount(6)
+        header_labels = ['index','Angel','FFT', 'Macleod', 'CZT FFT Peak', 'CZT Macleod']
         self.tableWidget_distance.setHorizontalHeaderLabels(header_labels)
         self.tableWidget_distance.setEditTriggers(QTableWidget.NoEditTriggers)
         # QHeaderView.Stretch 模式会使所有列等宽拉伸，填充可用空间。
@@ -214,7 +215,18 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[0], chirp, sample)
         az, el, idx, info = estimate_az_el_from_fft2d(self.fft_result_2D)
         self.display.update_point_cloud_polar("PointCloud", R_macleod, 90.0-az, size=10.0, color='g')
-        #self.bus.log.emit(f"距离计算结果：FFT={R_fft:.2f} m, Macleod={R_macleod:.2f} m, CZT FFT Peak={R_czt_fftpeak:.2f} m, CZT Macleod={R_czt_macleod:.2f} m")
+
+        # 更新表格显示距离、角度计算结果
+        row_data = [f"{self.current_index}",f"{az:.4f}",f"{R_fft:.4f} m",
+                    f"{R_macleod:.4f} m",f"{R_czt_fftpeak:.4f} m",f"{R_czt_macleod:.4f} m"]
+        row_count = self.tableWidget_distance.rowCount()
+        self.tableWidget_distance.insertRow(row_count)
+        for i, value in enumerate(row_data):
+            item = QTableWidgetItem(value)
+            item.setTextAlignment(Qt.AlignCenter)# 设置单元格居中对齐
+            self.tableWidget_distance.setItem(row_count, i, item)
+        self.tableWidget_distance.scrollToBottom()# 滚动到底部
+        self.current_index += 1
 
 
 # ================== 文件读取部分内容 ==================
@@ -334,8 +346,12 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             self.display.update_fft2d(self.fft_result_2D, sample, chirp)
 
         R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[0], chirp, sample)
-        # 更新表格显示距离计算结果
-        row_data = [f"{self.current_index}",f"{R_fft:.4f} m",f"{R_macleod:.4f} m",f"{R_czt_fftpeak:.4f} m",f"{R_czt_macleod:.4f} m"]
+        az, el, idx, info = estimate_az_el_from_fft2d(self.fft_result_2D)
+        self.display.update_point_cloud_polar("PointCloud", R_macleod, 90.0-az, size=10.0, color='g')
+
+        # 更新表格显示距离、角度计算结果
+        row_data = [f"{self.current_index}",f"{az:.4f}",f"{R_fft:.4f} m",
+                    f"{R_macleod:.4f} m",f"{R_czt_fftpeak:.4f} m",f"{R_czt_macleod:.4f} m"]
         row_count = self.tableWidget_distance.rowCount()
         self.tableWidget_distance.insertRow(row_count)
         for i, value in enumerate(row_data):
@@ -344,12 +360,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             self.tableWidget_distance.setItem(row_count, i, item)
         self.tableWidget_distance.scrollToBottom()# 滚动到底部
 
-        az, el, idx, info = estimate_az_el_from_fft2d(self.fft_result_2D)
-        #self.bus.log.emit(f"方位角={az:.2f}°, 俯仰角={el:.2f}° @ bin={idx}")
-        # 将标量转换为 NumPy 数组
-        #r_data = np.array([R_macleod])
-        #az_data = np.array([90.0-az])
-        self.display.update_point_cloud_polar("PointCloud", R_macleod, 90.0-az, size=10.0, color='g')
+
 
     def ShowNextFrame(self):
         if self.current_index < len(self.frame_data_list) - 1:

@@ -357,4 +357,4 @@ class Ui_MainWindow(object):
         self.pushButton_Next.setText(_translate("MainWindow", "Next Frame"))
         self.pushButton_CloseFile.setText(_translate("MainWindow", "CloseFile/Init"))
         self.tabWidget_Message.setTabText(self.tabWidget_Message.indexOf(self.tab_log), _translate("MainWindow", "LogMessage"))
-        self.tabWidget_Message.setTabText(self.tabWidget_Message.indexOf(self.tab_Distance), _translate("MainWindow", "Distance"))
+        self.tabWidget_Message.setTabText(self.tabWidget_Message.indexOf(self.tab_Distance), _translate("MainWindow", "Distance / Angel"))

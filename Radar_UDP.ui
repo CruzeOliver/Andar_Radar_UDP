@@ -504,7 +504,7 @@
       </widget>
       <widget class="QWidget" name="tab_Distance">
        <attribute name="title">
-        <string>Distance</string>
+        <string>Distance / Angel</string>
        </attribute>
        <layout class="QHBoxLayout" name="horizontalLayout_2">
         <item>
