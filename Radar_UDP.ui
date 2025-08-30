@@ -47,7 +47,7 @@
        </font>
       </property>
       <property name="currentIndex">
-       <number>0</number>
+       <number>2</number>
       </property>
       <widget class="QWidget" name="tab_ADC">
        <attribute name="title">
@@ -112,6 +112,25 @@
         </item>
         <item row="1" column="1">
          <widget class="QWidget" name="widget_CDtx1rx1" native="true"/>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="tab__AmpPhase">
+       <attribute name="title">
+        <string>Amp/Phase</string>
+       </attribute>
+       <layout class="QGridLayout" name="gridLayout_7">
+        <item row="0" column="0">
+         <widget class="QWidget" name="widget_APtx0rx0" native="true"/>
+        </item>
+        <item row="0" column="1">
+         <widget class="QWidget" name="widget_APtx0rx1" native="true"/>
+        </item>
+        <item row="1" column="0">
+         <widget class="QWidget" name="widget_APtx1rx0" native="true"/>
+        </item>
+        <item row="1" column="1">
+         <widget class="QWidget" name="widget_APtx1rx1" native="true"/>
         </item>
        </layout>
       </widget>

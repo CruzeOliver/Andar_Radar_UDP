@@ -21,6 +21,7 @@ class PgDisplay:
                  fft2d_placeholders: Dict[str, QWidget],
                  point_cloud_placeholders: Dict[str, QWidget],
                  constellation_placeholders: Dict[str, QWidget],
+                 amp_phase_placeholders: Dict[str, QWidget],
                  *,
                  r_max: float = 6.0,         # 最大量程 (距离)
                  fov_deg: float = 180.0,      # 扇形角度（例如120°）
@@ -40,6 +41,8 @@ class PgDisplay:
         self.pg_img_dict: Dict[str, ImageView] = {}        # 2DFFT 图像
         self.pg_cloud_dict: Dict[str, Dict[str, Any]] = {} # Point Cloud 图像
         self.pg_const_dict: Dict[str, Dict[str, Any]] = {} # Constellation Diagram 图像
+        self.pg_amp_phase_dict: Dict[str, Dict[str, Any]] = {} # Amp-Phase 图像
+
         self._colormap = self._build_jet_colormap()
         self._r_max = float(r_max)
         self._theta_center = np.deg2rad(theta_center_deg)
@@ -48,6 +51,7 @@ class PgDisplay:
 
         self._init_adc(adc_placeholders)
         self._init_constellation_placeholders(constellation_placeholders)
+        self._init_amp_phase(amp_phase_placeholders)
         self._init_fft1d(fft1d_placeholders)
         self._init_fft2d(fft2d_placeholders)
 
@@ -283,7 +287,107 @@ class PgDisplay:
             if k in getattr(self, 'pg_const_dict', {}):
                 self.update_constellation(k, iq[idx], mode=mode, **kwargs)
 
+    def update_amp_phase(self,
+                     iq: np.ndarray,
+                     *,
+                     chirp: int = 0,
+                     sample: int | None = None,
+                     key_map: dict | None = None,
+                     unwrap_phase: bool = True,
+                     decimate: int = 1,
+                     remove_dc: bool = False,
+                     autorange: bool = True):
+        """
+        批量更新四路“幅度/相位时序”图。
 
+        参数
+        ----
+        iq : np.ndarray
+            复数 IQ 数据，形状 (4, n_chirp, n_sample)
+        chirp : int
+            选择第几个 chirp 来画时序（默认第 0 个）
+        sample : int | None
+            仅取前 sample 个样点；为 None 则取整条 chirp
+        key_map : dict | None
+            占位键名 -> 天线索引 的映射。默认按当前工程：
+            {'APtx0rx0':0, 'APtx0rx1':1, 'APtx1rx0':2, 'APtx1rx1':3}
+        unwrap_phase : bool
+            是否对相位做 np.unwrap ，如果np.unwrap = true 相位会呈现一条直线，else相位会在 -π 到 π 之间跳变
+        decimate : int
+            下采样因子（>=1）。例如 4 表示每 4 点取 1 点
+        remove_dc : bool
+            是否对 z(t) 去直流（z -= mean(z)）。用于相位更稳的场景
+        autorange : bool
+            是否自动设置坐标范围
+        """
+        assert iq.ndim == 3 and iq.shape[0] == 4, "iq 形状必须是 (4, n_chirp, n_sample)"
+        n_chirp, n_sample = iq.shape[1], iq.shape[2]
+        if chirp < 0 or chirp >= n_chirp:
+            return
+
+        if key_map is None:
+            key_map = {
+                'APtx0rx0': 0,
+                'APtx0rx1': 1,
+                'APtx1rx0': 2,
+                'APtx1rx1': 3,
+            }
+
+        # 采样范围
+        end = n_sample if sample is None else min(sample, n_sample)
+        sl = slice(0, end, max(1, decimate))
+
+        for key, ant_idx in key_map.items():
+            h = self.pg_amp_phase_dict.get(key)
+            if not h:
+                continue
+
+            # 取一条 chirp 的复数时序
+            z = iq[ant_idx, chirp, :end]
+            if z.size == 0:
+                h['amp'].setData([], [])
+                h['phase'].setData([], [])
+                continue
+
+            # 可选去直流
+            if remove_dc:
+                m = np.nanmean(z)
+                if np.isfinite(m):
+                    z = z - m
+
+            # 下采样 & 清洗
+            z = z[sl]
+            z = np.nan_to_num(z, nan=0.0, posinf=0.0, neginf=0.0)
+
+            amp = np.abs(z).astype(np.float32)
+            ph = np.angle(z).astype(np.float32)
+            if unwrap_phase:
+                ph = np.unwrap(ph)
+
+            t = np.arange(z.size, dtype=np.int32)
+
+            # 更新曲线
+            h['amp'].setData(t, amp)
+            h['phase'].setData(t, ph)
+
+            # 自动范围
+            if autorange:
+                # Amp
+                amax = float(np.nanmax(amp)) if amp.size else 1.0
+                amax = 1.0 if (not np.isfinite(amax) or amax < 1e-6) else amax
+                h['pw_amp'].setXRange(0, max(1, t[-1] if t.size else 1), padding=0.02)
+                h['pw_amp'].setYRange(0, amax * 1.05, padding=0.02)
+
+                # Phase
+                if ph.size:
+                    pmin = float(np.nanmin(ph)); pmax = float(np.nanmax(ph))
+                    if not np.isfinite(pmin) or not np.isfinite(pmax) or pmax - pmin < 1e-6:
+                        pmin, pmax = -np.pi, np.pi
+                else:
+                    pmin, pmax = -np.pi, np.pi
+                pad = 0.05 * (pmax - pmin)
+                h['pw_phase'].setXRange(0, max(1, t[-1] if t.size else 1), padding=0.02)
+                h['pw_phase'].setYRange(pmin - pad, pmax + pad, padding=0.02)
 
 
     def update_fft1d(self, fft_results_in: np.ndarray, sample: int):
@@ -404,6 +508,41 @@ class PgDisplay:
             curve_I = pw.plot(pen=pg.mkPen('r', width=2), name='I')
             curve_Q = pw.plot(pen=pg.mkPen('b', width=2), name='Q')
             self.pg_plot_dict[key] = {'pw': pw, 'I': curve_I, 'Q': curve_Q}
+
+    def _init_amp_phase(self, placeholders: Dict[str, QWidget]):
+        """
+        为每个占位 QWidget 初始化“幅度/相位时序”双图：
+        - 上：|z|（Amplitude）
+        - 下：unwrap(angle(z))（Phase）
+        """
+        for key, container in placeholders.items():
+            layout = QVBoxLayout(container)
+
+            # --- 上图：Amplitude ---
+            pw_amp = pg.PlotWidget()
+            self._set_plot_style(pw_amp)
+            pw_amp.addLegend(offset=(10, 10))
+            pw_amp.setLabel('bottom', 'Sample')
+            pw_amp.setLabel('left', '|z|')
+            pw_amp.setTitle(f"Amp {key}", color='k', size='12pt')
+            curve_amp = pw_amp.plot(pen=pg.mkPen('r', width=2), name='Amplitude')
+
+            # --- 下图：Phase ---
+            pw_phase = pg.PlotWidget()
+            self._set_plot_style(pw_phase)
+            pw_phase.addLegend(offset=(10, 10))
+            pw_phase.setLabel('bottom', 'Sample')
+            pw_phase.setLabel('left', 'Phase ')
+            pw_phase.setTitle(f"Phase {key}", color='k', size='12pt')
+            curve_phase = pw_phase.plot(pen=pg.mkPen('b', width=2), name='unwrap(angle)')
+
+            # 布局 & 保存句柄
+            layout.addWidget(pw_amp)
+            layout.addWidget(pw_phase)
+            self.pg_amp_phase_dict[key] = {
+                'pw_amp': pw_amp, 'amp': curve_amp,
+                'pw_phase': pw_phase, 'phase': curve_phase,
+            }
 
     def _init_constellation_placeholders(self, placeholders: Dict[str, QWidget]):
         for key, container in placeholders.items():
@@ -526,7 +665,6 @@ class PgDisplay:
 
         return items
 
-
     def _build_jet_colormap(self) -> pg.ColorMap:
         # 色表（0-255的RGB）
         pos = np.linspace(0.0, 1.0, 7)
@@ -549,3 +687,6 @@ class PgDisplay:
         for h in self.pg_const_dict.values():
             h['scatter'].clear()
             h['unit_circle'].clear()
+        for h in self.pg_amp_phase_dict.values():
+            h['amp'].clear()
+            h['phase'].clear()
