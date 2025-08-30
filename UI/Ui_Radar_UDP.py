@@ -328,7 +328,7 @@ class Ui_MainWindow(object):
         MainWindow.setStatusBar(self.statusbar)
 
         self.retranslateUi(MainWindow)
-        self.tabWidget_Display.setCurrentIndex(2)
+        self.tabWidget_Display.setCurrentIndex(0)
         self.tabWidget_Message.setCurrentIndex(0)
         self.pushButton_Connect.clicked.connect(MainWindow.UDP_connect) # type: ignore
         self.pushButton_Disconnect.clicked.connect(MainWindow.UDP_disconnect) # type: ignore
