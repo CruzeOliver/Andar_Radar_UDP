@@ -256,10 +256,6 @@ class PgDisplay:
                      remove_dc: bool = False,
                      autorange: bool = True):
         """
-        批量更新四路“幅度/相位时序”图。
-
-        参数
-        ----
         iq : np.ndarray
             复数 IQ 数据，形状 (4, n_chirp, n_sample)
         chirp : int
@@ -277,6 +273,9 @@ class PgDisplay:
             是否对 z(t) 去直流（z -= mean(z)）。用于相位更稳的场景
         autorange : bool
             是否自动设置坐标范围
+        批量更新四路“幅度/相位时序”图，并相对 0 通道显示对比：
+            - 灰色虚线：0 通道的 |z| 与 phase（同一 chirp/窗口）
+            - 文本指标：ΔAmp(dB) 与 ΔPhase(°)（稳健中位数）
         """
         assert iq.ndim == 3 and iq.shape[0] == 4, "iq 形状必须是 (4, n_chirp, n_sample)"
         n_chirp, n_sample = iq.shape[1], iq.shape[2]
@@ -291,62 +290,127 @@ class PgDisplay:
                 'APtx1rx1': 3,
             }
 
-        # 采样范围
+        # 统一抽样窗口
         end = n_sample if sample is None else min(sample, n_sample)
         sl = slice(0, end, max(1, decimate))
 
+        # ---------- 准备参考通道（idx=0） ----------
+        ref_idx = 0
+        z_ref = iq[ref_idx, chirp, :end]
+        if remove_dc:
+            mref = np.nanmean(z_ref)
+            if np.isfinite(mref):
+                z_ref = z_ref - mref
+        z_ref = np.nan_to_num(z_ref[sl], nan=0.0, posinf=0.0, neginf=0.0)
+
+        amp_ref = np.abs(z_ref).astype(np.float32)
+        ph_ref  = np.angle(z_ref).astype(np.float32)
+        if unwrap_phase:
+            ph_ref = np.unwrap(ph_ref)
+
+        t_ref = np.arange(z_ref.size, dtype=np.int32)
+        eps = 1e-12  # 防除零
+
+        # ---------- 遍历每个通道 ----------
         for key, ant_idx in key_map.items():
             h = self.pg_amp_phase_dict.get(key)
             if not h:
                 continue
 
-            # 取一条 chirp 的复数时序
+            # 取该通道数据
             z = iq[ant_idx, chirp, :end]
             if z.size == 0:
                 h['amp'].setData([], [])
                 h['phase'].setData([], [])
+                h['amp_ref'].setData([], [])
+                h['phase_ref'].setData([], [])
+                if 'metrics_text' in h:
+                    h['metrics_text'].setText("")
                 continue
 
-            # 可选去直流
             if remove_dc:
                 m = np.nanmean(z)
                 if np.isfinite(m):
                     z = z - m
 
-            # 下采样 & 清洗
-            z = z[sl]
-            z = np.nan_to_num(z, nan=0.0, posinf=0.0, neginf=0.0)
-
+            z = np.nan_to_num(z[sl], nan=0.0, posinf=0.0, neginf=0.0)
             amp = np.abs(z).astype(np.float32)
-            ph = np.angle(z).astype(np.float32)
+            ph  = np.angle(z).astype(np.float32)
             if unwrap_phase:
                 ph = np.unwrap(ph)
 
             t = np.arange(z.size, dtype=np.int32)
 
-            # 更新曲线
+            # --- 更新曲线（本通道） ---
             h['amp'].setData(t, amp)
             h['phase'].setData(t, ph)
 
-            # 自动范围
+            # --- 画参考通道（同一窗口）的虚线 ---
+            h['amp_ref'].setData(t_ref, amp_ref)
+            h['phase_ref'].setData(t_ref, ph_ref)
+
+            # --- 计算与参考通道的差值：ΔAmp(dB) 与 ΔPhase(°) ---
+            # 注意：必须长度一致才好做逐点差，这里对齐到 min_len
+            min_len = min(amp.size, amp_ref.size)
+            if min_len >= 8:
+                a = amp[:min_len]; ar = amp_ref[:min_len]
+                p = ph[:min_len];  pr = ph_ref[:min_len]
+
+                # ΔAmp（dB）：20*log10(|z|/|z_ref|)
+                delta_amp_db = 20.0 * np.log10((a + eps) / (ar + eps))
+                delta_amp_db_med = float(np.nanmedian(delta_amp_db))
+
+                # ΔPhase（度）：(phase - phase_ref)
+                delta_phase = p - pr
+                if not unwrap_phase:
+                    # 若未展开，则把相位差规整到 [-pi, pi]
+                    delta_phase = (delta_phase + np.pi) % (2*np.pi) - np.pi
+                # 展示更直观：把角度规整到 [-45°, +45°]，避免 ±90° 假象
+                delta_phase_deg = np.degrees(delta_phase)
+                delta_phase_deg = np.where(delta_phase_deg >  45, delta_phase_deg - 90, delta_phase_deg)
+                delta_phase_deg = np.where(delta_phase_deg < -45, delta_phase_deg + 90, delta_phase_deg)
+                delta_phase_deg_med = float(np.nanmedian(delta_phase_deg))
+
+                # 文本显示（参考通道自身标记为 REF）
+                if ant_idx == ref_idx:
+                    text = "REF (Ch0)"
+                else:
+                    text = f"ΔAmp ≈ {delta_amp_db_med:+.2f} dB\nΔPhase ≈ {delta_phase_deg_med:+.1f}°"
+
+                # 放到 Amp 图右下角
+                try:
+                    vb = h['pw_amp'].getViewBox()
+                    (x0, x1), (y0, y1) = vb.state['viewRange'][0], vb.state['viewRange'][1]
+                    tx = x1 - 0.02*(x1 - x0)  # 右侧留 2% 边距
+                    ty = y0 + 0.35*(y1 - y0)  # 底部留 8% 边距
+                    h['metrics_text'].setPos(tx, ty)
+                except Exception:
+                    h['metrics_text'].setPos(t[0] if t.size else 0, (np.nanmax(amp) if amp.size else 1.0))
+                h['metrics_text'].setText(text)
+            else:
+                if 'metrics_text' in h:
+                    h['metrics_text'].setText("")
+
+            # --- 自动范围 ---
             if autorange:
                 # Amp
                 amax = float(np.nanmax(amp)) if amp.size else 1.0
                 amax = 1.0 if (not np.isfinite(amax) or amax < 1e-6) else amax
-                h['pw_amp'].setXRange(0, max(1, t[-1] if t.size else 1), padding=0.02)
+                xmax = max(t[-1] if t.size else 1, t_ref[-1] if t_ref.size else 1)
+                h['pw_amp'].setXRange(0, max(1, xmax), padding=0.02)
                 h['pw_amp'].setYRange(0, amax * 1.05, padding=0.02)
 
                 # Phase
-                if ph.size:
-                    pmin = float(np.nanmin(ph)); pmax = float(np.nanmax(ph))
+                if ph.size and ph_ref.size:
+                    pmin = float(np.nanmin([np.nanmin(ph),    np.nanmin(ph_ref)]))
+                    pmax = float(np.nanmax([np.nanmax(ph),    np.nanmax(ph_ref)]))
                     if not np.isfinite(pmin) or not np.isfinite(pmax) or pmax - pmin < 1e-6:
                         pmin, pmax = -np.pi, np.pi
                 else:
                     pmin, pmax = -np.pi, np.pi
                 pad = 0.05 * (pmax - pmin)
-                h['pw_phase'].setXRange(0, max(1, t[-1] if t.size else 1), padding=0.02)
+                h['pw_phase'].setXRange(0, max(1, xmax), padding=0.02)
                 h['pw_phase'].setYRange(pmin - pad, pmax + pad, padding=0.02)
-
 
     def update_fft1d(self, fft_results_in: np.ndarray, sample: int):
         """
@@ -495,12 +559,31 @@ class PgDisplay:
             curve_phase = pw_phase.plot(pen=pg.mkPen('b', width=2), name='unwrap(angle)')
 
             # 布局 & 保存句柄
+                    # 布局 & 保存句柄
             layout.addWidget(pw_amp)
             layout.addWidget(pw_phase)
+
+            # 参考通道（0 通道）对比用的虚线
+            amp_ref_curve   = pw_amp.plot(pen=pg.mkPen((120, 120, 120), width=1, style=Qt.DashLine),
+                                        name='Ref(Ch0) |z|')
+            phase_ref_curve = pw_phase.plot(pen=pg.mkPen((120, 120, 120), width=1, style=Qt.DashLine),
+                                            name='Ref(Ch0) phase')
+
+            # 文本指标（显示 ΔAmp / ΔPhase）
+            metrics_text = pg.TextItem(
+                color=(20, 20, 20),
+                fill=pg.mkBrush(255, 255, 255, 200),
+                anchor=(1, 0)  # 右下角对齐：x=1(右), y=0(下)
+            )
+            # 将文本加到“上图：Amp”里
+            pw_amp.addItem(metrics_text)
+
             self.pg_amp_phase_dict[key] = {
-                'pw_amp': pw_amp, 'amp': curve_amp,
-                'pw_phase': pw_phase, 'phase': curve_phase,
+                'pw_amp': pw_amp, 'amp': curve_amp, 'amp_ref': amp_ref_curve,
+                'pw_phase': pw_phase, 'phase': curve_phase, 'phase_ref': phase_ref_curve,
+                'metrics_text': metrics_text
             }
+
 
     def _init_constellation_placeholders(self, placeholders: Dict[str, QWidget]):
         for key, container in placeholders.items():
@@ -552,8 +635,6 @@ class PgDisplay:
                 'minor_axis': minor_axis,
                 'metrics_text': text_item,
             }
-
-
 
     def _init_fft1d(self, placeholders: Dict[str, QWidget]):
         for key, container in placeholders.items():
