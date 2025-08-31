@@ -756,18 +756,46 @@ class PgDisplay:
         return pg.ColorMap(pos, colors)
 
     def reset(self):
-        # 清空曲线与图像
+        """重置所有图表数据，清空显示内容并重置状态"""
+        # 重置 ADC 和 1DFFT 曲线
         for h in self.pg_plot_dict.values():
-            if 'I' in h: h['I'].clear()
-            if 'Q' in h: h['Q'].clear()
-            if 'MAG' in h: h['MAG'].clear()
+            if 'I' in h:
+                h['I'].clear()
+            if 'Q' in h:
+                h['Q'].clear()
+            if 'MAG' in h:
+                h['MAG'].clear()
+
+        # 重置 2DFFT 图像
         for iv in self.pg_img_dict.values():
             iv.clear()
+            # 重置颜色映射
+            iv.setColorMap(self._colormap)
+
+        # 重置点云数据及缓冲区
+        self._r_buffer.clear()
+        self._theta_buffer.clear()
         for h in self.pg_cloud_dict.values():
             h['scatter'].clear()
+
+        # 重置星座图（包括拟合元素）
         for h in self.pg_const_dict.values():
             h['scatter'].clear()
             h['unit_circle'].clear()
+            h['ellipse'].clear()
+            h['major_axis'].clear()
+            h['minor_axis'].clear()
+            h['metrics_text'].setText("")
+            # 重置坐标范围
+            h['pw'].setRange(xRange=(-1, 1), yRange=(-1, 1), padding=0.05)
+
+        # 重置幅度/相位图（包括参考曲线和文本）
         for h in self.pg_amp_phase_dict.values():
             h['amp'].clear()
             h['phase'].clear()
+            h['amp_ref'].clear()
+            h['phase_ref'].clear()
+            h['metrics_text'].setText("")
+            # 重置坐标范围
+            h['pw_amp'].setRange(xRange=(0, 1), yRange=(0, 1), padding=0.02)
+            h['pw_phase'].setRange(xRange=(0, 1), yRange=(-np.pi, np.pi), padding=0.02)
