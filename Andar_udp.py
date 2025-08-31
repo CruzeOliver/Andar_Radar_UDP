@@ -203,7 +203,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         # 判断是否满足显示间隔
         if current_time - self.last_display_time > self.display_interval:
             self.display.update_adc4(iq, chirp, sample)
-            self.display.update_constellations_all(iq, mode="all_samples",remove_dc=True)
+            self.display.update_constellations(iq, remove_dc=True, max_points=3000, show_fit=True)
             self.display.update_amp_phase(iq, chirp=0, decimate=1, unwrap_phase=False)
             if self.checkBox_1dfft.isChecked():
                 self.display.update_fft1d(self.fft_results_1D, sample)
@@ -335,7 +335,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
 
         iq = reorder_frame(frame_data_flat, int(chirp), int(sample))
         self.display.update_adc4(iq, chirp, sample)
-        self.display.update_constellations_all(iq, mode="all_samples",remove_dc=True)
+        self.display.update_constellations(iq, remove_dc=True, max_points=3000, show_fit=True)
         self.display.update_amp_phase(iq, chirp=0, decimate=1, unwrap_phase=False)
         self.fft_results_1D = Perform1D_FFT(iq)
         self.fft_result_2D  = Perform2D_FFT(self.fft_results_1D)

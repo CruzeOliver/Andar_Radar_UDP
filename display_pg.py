@@ -76,117 +76,40 @@ class PgDisplay:
             h['Q'].setData(t, Q)
             h['pw'].setXRange(0, sample, padding=0.02)
 
-    def update_constellation(self,
-                        key: str,
-                        iq_chan: np.ndarray,
-                        *,
-                        max_points: int = 4000,
-                        remove_dc: bool = True,
-                        set_ref_circle: bool = True,
-                        autorange: bool = True,
-                        mode: str = "all_samples"):
+    def update_constellations(self,
+                          iq: np.ndarray,
+                          *,
+                          key_map: dict = None,
+                          max_points: int = 4000,
+                          remove_dc: bool = True,
+                          set_ref_circle: bool = True,
+                          autorange: bool = True,
+                          show_fit: bool = True,
+                          nsig: float = 2.0):
         """
-        更新并绘制单路星座图 (I/Q 散点)。
+        批量更新四路星座图（I/Q 散点）并叠加椭圆拟合。
+        - 一律使用 all_samples：将 (n_chirp, n_sample) 展平后全部点绘制（超量自动抽样）。
+        - 每个子图：散点 + 参考圆(RMS) + 可选椭圆拟合(2σ，主/次轴+数值文本)。
 
         参数
         ----
-        key : str
-            星座图的标识符，对应 init 时传入的占位 QWidget（例如 "c_tx0rx0"）。
-        iq_chan : np.ndarray
-            单个天线的 IQ 数据，形状 (n_chirp, n_sample)，复数数组。
-            - 实部 = I 通道，虚部 = Q 通道
-        max_points : int, 默认 4000
-            为避免绘制过慢，若数据点数大于该值，将进行等间隔抽样。
-        remove_dc : bool, 默认 True
-            是否去直流分量（即减去平均值），避免星座图中心偏移。
-        set_ref_circle : bool, 默认 True
-            是否绘制参考圆。半径取 I/Q 均方根值 (RMS)，用于参考调制幅度。
-        autorange : bool, 默认 True
-            是否自动调整坐标范围，使散点和参考圆始终居中可见。
-        mode : str, 默认 "all_samples"
-        - "all_samples" : 使用所有采样点（默认，显示为圆环）
-        - "per_chirp"   : 每个 chirp 只取一个点（第0号采样点）
-        - "decimate:N"  : 每 N 个采样点抽取一个，例如 "decimate:16"
-        """
-        if key not in getattr(self, 'pg_const_dict', {}):
-            return
-        h = self.pg_const_dict[key]
-
-        # --- 选择采样模式 ---
-        if mode == "per_chirp" and iq_chan.ndim == 2:
-            # 每个 chirp 取一个点（这里选第0个样点，可以换成 sample//2）
-            z = iq_chan[:, 0]
-        else:
-            # 拉平
-            z = np.asarray(iq_chan, dtype=np.complex64).ravel()
-            if mode.startswith("decimate:"):
-                try:
-                    N = int(mode.split(":")[1])
-                    if N > 1:
-                        z = z[::N]
-                except Exception:
-                    pass
-            elif z.size > max_points:
-                step = max(1, z.size // max_points)
-                z = z[::step]
-
-        if z.size == 0:
-            h['scatter'].setData(x=[], y=[])
-            h['unit_circle'].setData([], [])
-            return
-
-        # 去直流
-        if remove_dc:
-            z = z - np.nanmean(z)
-
-        # 清洗无效值
-        z_clean = np.nan_to_num(z, nan=0.0, posinf=0.0, neginf=0.0)
-        I = np.real(z_clean)
-        Q = np.imag(z_clean)
-
-        # 更新散点
-        h['scatter'].setData(
-            x=I, y=Q,
-            pen=None,
-            brush=h['scatter'].opts.get('brush'),
-            size=h['scatter'].opts.get('size', 3)
-        )
-
-        # 参考圆
-        if set_ref_circle and z_clean.size > 0:
-            R = float(np.sqrt(np.mean(I*I + Q*Q)))
-            if (not np.isfinite(R)) or R < 1e-9:
-                R = 1.0
-            t = np.linspace(0, 2 * np.pi, 361, dtype=np.float32)
-            h['unit_circle'].setData(R * np.cos(t), R * np.sin(t))
-        else:
-            h['unit_circle'].setData([], [])
-
-        # 自动缩放
-        if autorange and z_clean.size > 0:
-            r = float(np.nanmax(np.abs(z_clean)))
-            if (not np.isfinite(r)) or r < 1e-9:
-                r = 1.0
-            pad = 0.1 * r
-            try:
-                h['pw'].setRange(
-                    xRange=(-r - pad, r + pad),
-                    yRange=(-r - pad, r + pad),
-                    padding=0.0
-                )
-            except Exception:
-                h['pw'].setRange(xRange=(-1.0, 1.0),
-                                yRange=(-1.0, 1.0),
-                                padding=0.0)
-
-    def update_constellations_all(self,
-                            iq: np.ndarray,
-                            *,
-                            key_map: dict = None,
-                            mode: str = "all_samples",
-                            **kwargs):
-        """
-        批量更新四路星座图。
+        iq : np.ndarray
+            复数 IQ 数据，形状 (4, n_chirp, n_sample)。
+        key_map : dict
+            占位键名 -> 天线索引映射。默认与你现在的键名一致：
+            {'CDtx0rx0':0,'CDtx0rx1':1,'CDtx1rx0':2,'CDtx1rx1':3}
+        max_points : int
+            点数过大时的等间隔抽样上限，默认 4000。
+        remove_dc : bool
+            是否减去平均值（去直流偏移），默认 True。
+        set_ref_circle : bool
+            是否绘制 RMS 参考圆，默认 True。
+        autorange : bool
+            是否自动设置坐标范围，默认 True。
+        show_fit : bool
+            是否叠加椭圆拟合（PCA 统计椭圆 + 主/次轴 + 文本），默认 True。
+        nsig : float
+            拟合椭圆半轴的 σ 倍数，默认 2.0（约覆盖 95% 点，假设近似高斯）。
         """
         assert iq.ndim == 3 and iq.shape[0] == 4, "iq 形状必须是 (4, chirp, sample)"
         if key_map is None:
@@ -196,9 +119,131 @@ class PgDisplay:
                 'CDtx1rx0': 2,
                 'CDtx1rx1': 3,
             }
-        for k, idx in key_map.items():
-            if k in getattr(self, 'pg_const_dict', {}):
-                self.update_constellation(k, iq[idx], mode=mode, **kwargs)
+
+        for key, ant_idx in key_map.items():
+            if key not in getattr(self, 'pg_const_dict', {}):
+                continue
+            h = self.pg_const_dict[key]
+
+            # 1) 展平 + 抽样（all_samples 策略）
+            z = np.asarray(iq[ant_idx], dtype=np.complex64).ravel()
+            if z.size == 0:
+                h['scatter'].setData(x=[], y=[])
+                h['unit_circle'].setData([], [])
+                # 清空拟合层
+                h['ellipse'].setData([], [])
+                h['major_axis'].setData([], [])
+                h['minor_axis'].setData([], [])
+                h['metrics_text'].setText("")
+                continue
+
+            if remove_dc:
+                m = np.nanmean(z)
+                if np.isfinite(m):
+                    z = z - m
+
+            if z.size > max_points:
+                step = max(1, z.size // max_points)
+                z = z[::step]
+
+            # 2) 清洗无效值并拆 I/Q
+            z_clean = np.nan_to_num(z, nan=0.0, posinf=0.0, neginf=0.0)
+            I = np.real(z_clean)
+            Q = np.imag(z_clean)
+
+            # 3) 散点
+            h['scatter'].setData(
+                x=I, y=Q,
+                pen=None,
+                brush=h['scatter'].opts.get('brush'),
+                size=h['scatter'].opts.get('size', 3)
+            )
+
+            # 4) 参考圆（RMS 半径）
+            if set_ref_circle and z_clean.size > 0:
+                R = float(np.sqrt(np.mean(I*I + Q*Q)))
+                if (not np.isfinite(R)) or R < 1e-9:
+                    R = 1.0
+                t = np.linspace(0, 2*np.pi, 361, dtype=np.float32)
+                h['unit_circle'].setData(R*np.cos(t), R*np.sin(t))
+            else:
+                h['unit_circle'].setData([], [])
+
+            # 5) 自动坐标范围
+            if autorange and z_clean.size > 0:
+                r = float(np.nanmax(np.abs(z_clean)))
+                if (not np.isfinite(r)) or r < 1e-9:
+                    r = 1.0
+                pad = 0.1 * r
+                try:
+                    h['pw'].setRange(
+                        xRange=(-r - pad, r + pad),
+                        yRange=(-r - pad, r + pad),
+                        padding=0.0
+                    )
+                except Exception:
+                    h['pw'].setRange(xRange=(-1.0, 1.0), yRange=(-1.0, 1.0), padding=0.0)
+
+            # 6) 椭圆拟合（PCA on I,Q）
+            if show_fit and I.size >= 8:
+                cx = float(np.mean(I)); cy = float(np.mean(Q))
+                X = np.vstack([I - cx, Q - cy])          # 2×N
+                C = np.cov(X)                             # 2×2
+                if np.any(~np.isfinite(C)):
+                    C = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=float)
+
+                vals, vecs = np.linalg.eigh(C)           # λ1≤λ2
+                vals = np.clip(vals, 1e-12, None)
+                idx_max = int(np.argmax(vals)); idx_min = 1 - idx_max
+                lam_major, lam_minor = float(vals[idx_max]), float(vals[idx_min])
+                v_major = vecs[:, idx_max]
+                v_minor = vecs[:, idx_min]
+
+                a = nsig * np.sqrt(lam_major)            # 长半轴
+                b = nsig * np.sqrt(lam_minor)            # 短半轴
+                theta = float(np.arctan2(v_major[1], v_major[0]))
+
+                # 椭圆轮廓
+                tt = np.linspace(0, 2*np.pi, 361, dtype=np.float32)
+                ex = a * np.cos(tt); ey = b * np.sin(tt)
+                Rm = np.column_stack([v_major, v_minor])  # 2×2
+                E = Rm @ np.vstack([ex, ey])              # 2×361
+                exw = E[0, :] + cx; eyw = E[1, :] + cy
+                h['ellipse'].setData(exw, eyw)
+
+                # 主/次轴线段
+                p1 = np.array([cx, cy]) + a * v_major
+                p2 = np.array([cx, cy]) - a * v_major
+                q1 = np.array([cx, cy]) + b * v_minor
+                q2 = np.array([cx, cy]) - b * v_minor
+                h['major_axis'].setData([p1[0], p2[0]], [p1[1], p2[1]])
+                h['minor_axis'].setData([q1[0], q2[0]], [q1[1], q2[1]])
+
+                # 文本指标：轴比 & 倾角
+                r_ax = float(b / a) if a > 1e-12 else 1.0
+                deg  = float(np.degrees(theta))
+                if deg > 45:
+                    deg -= 90
+                elif deg < -45:
+                    deg += 90
+                text = f"axis_ratio b/a = {r_ax:.3f}\ntilt = {deg:.1f}°"
+
+                # 放右上角（优先），否则放中心
+                try:
+                    vb = h['pw'].getViewBox()
+                    (x0, x1), (y0, y1) = vb.state['viewRange'][0], vb.state['viewRange'][1]
+                    tx = x0 + 0.02*(x1 - x0)
+                    ty = y1 - 0.06*(y1 - y0)
+                    h['metrics_text'].setPos(tx, ty)
+                except Exception:
+                    h['metrics_text'].setPos(cx, cy)
+                h['metrics_text'].setText(text)
+            else:
+                # 关闭拟合或点太少：清空拟合层
+                h['ellipse'].setData([], [])
+                h['major_axis'].setData([], [])
+                h['minor_axis'].setData([], [])
+                h['metrics_text'].setText("")
 
     def update_amp_phase(self,
                      iq: np.ndarray,
@@ -472,7 +517,7 @@ class PgDisplay:
             pw.addItem(pg.InfiniteLine(angle=0, pen=axis_pen))
             pw.addItem(pg.InfiniteLine(angle=90, pen=axis_pen))
 
-            circle_pen = pg.mkPen((255,0,0), width=3, style=Qt.DashLine)
+            circle_pen = pg.mkPen((255, 0, 0), width=3, style=Qt.DashLine)
             unit_circle = pw.plot([], [], pen=circle_pen, name='ref_circle')
 
             scatter = pg.ScatterPlotItem(
@@ -483,8 +528,31 @@ class PgDisplay:
             )
             pw.addItem(scatter)
 
+            # === 椭圆拟合相关（新增） ===
+            ellipse_pen = pg.mkPen((0, 150, 0, 220), width=2)   # 椭圆轮廓：绿
+            axis_pen2   = pg.mkPen((0, 120, 0, 160), width=1)   # 主/次轴：淡绿
+            text_item   = pg.TextItem(color=(10, 120, 10), fill=pg.mkBrush(255, 255, 255, 180))
+
+            ellipse_curve = pw.plot([], [], pen=ellipse_pen, name='fit_ellipse')
+            major_axis = pg.PlotDataItem(pen=axis_pen2)  # 主轴线段
+            minor_axis = pg.PlotDataItem(pen=axis_pen2)  # 次轴线段
+            pw.addItem(major_axis)
+            pw.addItem(minor_axis)
+            pw.addItem(text_item)
+
             layout.addWidget(pw)
-            self.pg_const_dict[key] = {'pw': pw, 'unit_circle': unit_circle, 'scatter': scatter}
+
+            # 保存所有句柄
+            self.pg_const_dict[key] = {
+                'pw': pw,
+                'unit_circle': unit_circle,
+                'scatter': scatter,
+                'ellipse': ellipse_curve,
+                'major_axis': major_axis,
+                'minor_axis': minor_axis,
+                'metrics_text': text_item,
+            }
+
 
 
     def _init_fft1d(self, placeholders: Dict[str, QWidget]):
