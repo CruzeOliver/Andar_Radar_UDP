@@ -414,20 +414,44 @@ class PgDisplay:
 
     def update_fft1d(self, fft_results_in: np.ndarray, sample: int):
         """
+        更新四个天线的 1D FFT 图，并显示峰值的 bin。
         fft_results_in: shape (4, n_chirp, n_points)
         策略：对 chirp 维度做均值，再取幅度
         """
         fft1d_keys = ['1DFFTtx0rx0', '1DFFTtx0rx1', '1DFFTtx1rx0', '1DFFTtx1rx1']
-        max_bin = sample // 2
+        max_bin = sample // 2  # 正频率部分的 bin 数
         x = np.arange(max_bin)
+
         for ant_idx, key in enumerate(fft1d_keys):
             h = self.pg_plot_dict.get(key)
             if not h:
                 continue
+
+            # 对 chirp 维度做均值处理
             avg_fft = np.mean(fft_results_in[ant_idx, :, :], axis=0)
-            mag = np.abs(avg_fft[:max_bin])
+            mag = np.abs(avg_fft[:max_bin])  # 计算幅度谱
+
+            # 找到峰值所在的 bin
+            peak_bin = np.argmax(mag)
+
+            # 更新幅度图
             h['MAG'].setData(x, mag)
             h['pw'].setXRange(0, max_bin, padding=0.02)
+
+            # 在右上角显示峰值 bin
+            peak_bin_text = f"Peak Bin: {peak_bin}"  # 显示峰值 bin
+            h['metrics_text'].setText(peak_bin_text)
+
+            # 设置文本位置为右上角
+            try:
+                vb = h['pw'].getViewBox()
+                (x0, x1), (y0, y1) = vb.state['viewRange'][0], vb.state['viewRange'][1]
+                tx = x1 - 0.02 * (x1 - x0)  # 右侧 2% 边距
+                ty = y1 - 0.15 * (y1 - y0)  # 上方 15% 边距
+                h['metrics_text'].setPos(tx, ty)
+            except Exception:
+                pass
+
 
     def update_fft2d(self, fft2d_results: np.ndarray, n_points: int, n_chirp: int):
         """
@@ -636,7 +660,7 @@ class PgDisplay:
                 'metrics_text': text_item,
             }
 
-    def _init_fft1d(self, placeholders: Dict[str, QWidget]):
+    def _init_fft1d2(self, placeholders: Dict[str, QWidget]):
         for key, container in placeholders.items():
             layout = QVBoxLayout(container)
             pw = pg.PlotWidget()
@@ -649,6 +673,32 @@ class PgDisplay:
 
             curve = pw.plot(pen=pg.mkPen('r', width=2), name='MAG')
             self.pg_plot_dict[key] = {'pw': pw, 'MAG': curve}
+
+    def _init_fft1d(self, placeholders: Dict[str, QWidget]):
+        """
+        初始化每个 1D FFT 图表，并添加用于显示峰值的 bin 的 TextItem。
+        """
+        for key, container in placeholders.items():
+            layout = QVBoxLayout(container)
+            pw = pg.PlotWidget()
+            self._set_plot_style(pw)
+            pw.addLegend(offset=(10, 10))
+            pw.setLabel('bottom', 'FFT Bin')
+            pw.setLabel('left', 'Amplitude')
+            pw.setTitle(f"{key}", color='k', size='12pt')
+
+            # --- 添加用于显示 Peak Bin 的 TextItem ---
+            metrics_text = pg.TextItem(color=(20, 20, 20),
+                                    fill=pg.mkBrush(255, 255, 255, 200),
+                                    anchor=(1, 1))  # 右上角对齐
+            pw.addItem(metrics_text)
+
+            layout.addWidget(pw)
+            curve = pw.plot(pen=pg.mkPen('r', width=2), name='MAG')
+
+            # 保存句柄
+            self.pg_plot_dict[key] = {'pw': pw, 'MAG': curve, 'metrics_text': metrics_text}
+
 
     def _init_fft2d(self, placeholders: Dict[str, QWidget]):
         for key, container in placeholders.items():
