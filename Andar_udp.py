@@ -102,7 +102,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.generate_unique_filename()
 
         self.last_display_time = time.time()# 记录最后显示的时间
-        self.display_interval = 1.0
+        self.display_interval = 0.8
 
         adc4_keys  = ['tx0rx0', 'tx0rx1', 'tx1rx0', 'tx1rx1']
         fft1d_keys = ['1DFFTtx0rx0', '1DFFTtx0rx1', '1DFFTtx1rx0', '1DFFTtx1rx1']
@@ -203,8 +203,9 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         # 判断是否满足显示间隔
         if current_time - self.last_display_time > self.display_interval:
             self.display.update_adc4(iq, chirp, sample)
-            self.display.update_constellations(iq, remove_dc=True, max_points=3000, show_fit=True)
-            self.display.update_amp_phase(iq, chirp=0, decimate=1, unwrap_phase=False)
+            if self.checkBox_APcoherence.isChecked():
+                self.display.update_constellations(iq, remove_dc=True, max_points=3000, show_fit=True)
+                self.display.update_amp_phase(iq, chirp=0, decimate=1, unwrap_phase=False)
             if self.checkBox_1dfft.isChecked():
                 self.display.update_fft1d(self.fft_results_1D, sample)
             if self.checkBox_2dfft.isChecked():
@@ -359,8 +360,6 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             item.setTextAlignment(Qt.AlignCenter)# 设置单元格居中对齐
             self.tableWidget_distance.setItem(row_count, i, item)
         self.tableWidget_distance.scrollToBottom()# 滚动到底部
-
-
 
     def ShowNextFrame(self):
         if self.current_index < len(self.frame_data_list) - 1:

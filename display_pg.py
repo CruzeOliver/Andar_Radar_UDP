@@ -608,7 +608,6 @@ class PgDisplay:
                 'metrics_text': metrics_text
             }
 
-
     def _init_constellation_placeholders(self, placeholders: Dict[str, QWidget]):
         for key, container in placeholders.items():
             layout = QVBoxLayout(container)
@@ -698,7 +697,6 @@ class PgDisplay:
 
             # 保存句柄
             self.pg_plot_dict[key] = {'pw': pw, 'MAG': curve, 'metrics_text': metrics_text}
-
 
     def _init_fft2d(self, placeholders: Dict[str, QWidget]):
         for key, container in placeholders.items():
@@ -793,7 +791,6 @@ class PgDisplay:
             text_item.setTransform(QTransform().rotate(th_deg))
             text_item.setPos(text_x, text_y)
             items.append(text_item)
-
         return items
 
     def _build_jet_colormap(self) -> pg.ColorMap:
