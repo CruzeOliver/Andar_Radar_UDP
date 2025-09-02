@@ -335,11 +335,24 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             frame_data_flat = frame_data.flatten()
 
         iq = reorder_frame(frame_data_flat, int(chirp), int(sample))
+        self.fft_results_1D = Perform1D_FFT(iq)
+        self.fft_result_2D  = Perform2D_FFT(self.fft_results_1D)
+
+        peak_idx = np.unravel_index(np.argmax(np.abs(self.fft_result_2D[0])), self.fft_result_2D[0].shape)
+        zij_vector = self.fft_result_2D[:, peak_idx[0], peak_idx[1]]
+        # alpha_matrix = amplitude_calibration(zij_vector)
+        # phi_matrix = phase_calibration(zij_vector)
+        # if self.checkBox_2dfft.isChecked():
+        #     iq = apply_calibration(iq, alpha_matrix, phi_matrix)
+        beta_vector = complex_channel_calibration(zij_vector)
+        # 4. 应用校准
+        if self.checkBox_2dfft.isChecked():
+            iq = apply_complex_calibration(iq, beta_vector)
+
         self.display.update_adc4(iq, chirp, sample)
         self.display.update_constellations(iq, remove_dc=True, max_points=3000, show_fit=True)
         self.display.update_amp_phase(iq, chirp=0, decimate=1, unwrap_phase=False)
-        self.fft_results_1D = Perform1D_FFT(iq)
-        self.fft_result_2D  = Perform2D_FFT(self.fft_results_1D)
+
 
         if self.checkBox_1dfft.isChecked():
             self.display.update_fft1d(self.fft_results_1D, sample)

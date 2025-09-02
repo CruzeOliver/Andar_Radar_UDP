@@ -408,3 +408,280 @@ def estimate_az_el_from_fft2d(fft2d_results):
         d_spacing=d_spacing
     )
     return az_deg, el_deg, (int(k_dop), int(k_rng)), extra
+
+
+###==================== 基于最小二乘法进行IQ校准(原始IQ进行校准) ===================
+def amplitude_calibration2(iq: np.ndarray):
+    """
+    使用最小二乘法进行幅度校准，并返回校准因子矩阵。
+    输入： iq: np.ndarray, 形状为 (n_ant, n_chirp, n_points)
+    输出： 校准因子矩阵 alpha_matrix, 形状为 (n_ant, n_ant)
+    """
+    n_ant, _, _ = iq.shape
+
+    # 这一步是关键：对每个通道取平均幅度，得到一个 (n_ant,) 向量
+    # 这里取绝对值和均值操作，将数据从 (4, 256, 128) 降维到 (4,)
+    y_ij = np.abs(iq.mean(axis=(1, 2)))
+
+    # 初始化幅度因子，以第一个天线为基准（因子为1）
+    alpha_tx = np.ones(n_ant)
+    alpha_rx = np.ones(n_ant)
+
+    # 迭代求解
+    max_iterations = 100
+    for _ in range(max_iterations):
+        # 固定 alpha_tx，求解 alpha_rx
+        # 使用最小二乘法求解
+        for j in range(1, n_ant):
+            numerator = np.dot(y_ij, alpha_tx)
+            denominator = np.sum(alpha_tx**2)
+            if denominator > 1e-9:
+                alpha_rx[j] = numerator / denominator
+
+        # 固定 alpha_rx，求解 alpha_tx
+        for i in range(1, n_ant):
+            numerator = np.dot(y_ij, alpha_rx)
+            denominator = np.sum(alpha_rx**2)
+            if denominator > 1e-9:
+                alpha_tx[i] = numerator / denominator
+
+    # 返回校准因子矩阵
+    alpha_matrix = np.outer(alpha_tx, alpha_rx)
+
+    return alpha_matrix
+
+def phase_calibration2(iq: np.ndarray):
+    """
+    使用最小二乘法进行相位校准，并返回校准因子矩阵。
+    输入： iq: np.ndarray, 形状为 (n_ant, n_chirp, n_points)
+    输出： 校准因子矩阵 phi_matrix, 形状为 (n_ant, n_ant)
+    """
+    n_ant, _, _ = iq.shape
+
+    # 这一步是关键：对每个通道取平均相位，得到一个 (n_ant,) 向量
+    theta_ij = np.angle(iq.mean(axis=(1, 2)))
+
+    # 构建线性方程组 Ax = b
+    num_unknowns = 2 * (n_ant - 1)
+    A = np.zeros((n_ant * n_ant, num_unknowns))
+    b = np.zeros(n_ant * n_ant)
+
+    # 这里的循环需要根据您的虚拟天线映射来构建 A 和 b
+    tx_map = np.array([0, 1, 0, 1])
+    rx_map = np.array([0, 0, 1, 1])
+
+    eq_index = 0
+    for i in range(n_ant):
+        # 方程: theta_ij = phi_tx_i + phi_rx_j
+        # 对应的 A 矩阵行
+        if tx_map[i] > 0:
+            A[eq_index, tx_map[i] - 1] = 1  # 对应 phi_tx
+        if rx_map[i] > 0:
+            A[eq_index, (n_ant - 1) + rx_map[i] - 1] = 1  # 对应 phi_rx
+
+        b[eq_index] = theta_ij[i]
+        eq_index += 1
+
+    # 求解 Ax=b
+    x, _, _, _ = np.linalg.lstsq(A[:eq_index], b[:eq_index], rcond=None)
+
+    # 从求解结果中提取相位
+    phi_tx = np.zeros(n_ant)
+    phi_rx = np.zeros(n_ant)
+    phi_tx[1:] = x[:n_ant - 1]
+    phi_rx[1:] = x[n_ant - 1:]
+
+    # 返回校准因子矩阵
+    phi_matrix = np.outer(phi_tx, phi_rx)
+
+    return phi_matrix
+
+def apply_calibration2(iq_data: np.ndarray, alpha_matrix: np.ndarray, phi_matrix: np.ndarray):
+    """
+    使用幅度校准矩阵和相位校准矩阵对 IQ 数据进行校准。
+    输入：
+        iq_data: np.ndarray, 形状为 (n_ant, n_chirp, n_points)
+        alpha_matrix: np.ndarray, 幅度校准因子矩阵，形状为 (n_ant, n_ant)
+        phi_matrix: np.ndarray, 相位校准因子矩阵，形状为 (n_ant, n_ant)
+    输出：
+        calibrated_iq: np.ndarray, 校准后的 IQ 数据
+    """
+    # 这里的 iq_data 维度应该是 (虚拟天线, chirp, 样点)
+    # 假设虚拟天线是发射天线和接收天线的组合
+    # 因此，alpha_matrix 和 phi_matrix 需要与 iq_data 的第一个维度进行匹配
+
+    # 实际上，这取决于您的数据排序。如果您像之前一样对数据进行了重新排序，
+    # 那么您需要将 alpha_matrix 和 phi_matrix 重新映射到虚拟天线上。
+
+    # 示例映射：
+    # virtual_ant_map = [0, 2, 1, 3]
+    # tx_map = [0, 1, 0, 1]
+    # rx_map = [0, 0, 1, 1]
+
+    # 根据映射关系，将校准矩阵转换为一维向量
+    tx_map = np.array([0, 1, 0, 1])
+    rx_map = np.array([0, 0, 1, 1])
+
+    cal_amplitude_vector = alpha_matrix[tx_map, rx_map]
+    cal_phase_vector = phi_matrix[tx_map, rx_map]
+
+    # 使用正确的广播方式进行校准
+    calibrated_iq = iq_data / cal_amplitude_vector[:, np.newaxis, np.newaxis]
+    calibrated_iq *= np.exp(-1j * cal_phase_vector[:, np.newaxis, np.newaxis])
+
+    return calibrated_iq
+
+
+###==================== 基于最小二乘法进行IQ校准(2DFFT峰值点) ===================
+def amplitude_calibration(zij_vector: np.ndarray):
+    """
+    使用最小二乘法进行幅度校准，并返回校准因子矩阵。
+
+    输入：
+        zij_vector: np.ndarray, 形状为 (n_ant,) 的复数向量，
+                    代表每个通道在目标峰值处的响应。
+
+    输出：
+        alpha_matrix: np.ndarray, 形状为 (n_ant, n_ant) 的幅度校准因子矩阵。
+    """
+    n_ant = zij_vector.shape[0]
+
+    # 直接使用 zij_vector 的幅度作为观测值
+    y_ij = np.abs(zij_vector)
+
+    # 初始化幅度因子，以第一个天线为基准
+    alpha_tx = np.ones(n_ant)
+    alpha_rx = np.ones(n_ant)
+
+    # 迭代求解
+    max_iterations = 100
+    for _ in range(max_iterations):
+        # 固定 alpha_tx，求解 alpha_rx
+        for j in range(1, n_ant):
+            numerator = np.dot(y_ij, alpha_tx)
+            denominator = np.sum(alpha_tx**2)
+            if denominator > 1e-9:
+                alpha_rx[j] = numerator / denominator
+        # 固定 alpha_rx，求解 alpha_tx
+        for i in range(1, n_ant):
+            numerator = np.dot(y_ij, alpha_rx)
+            denominator = np.sum(alpha_rx**2)
+            if denominator > 1e-9:
+                alpha_tx[i] = numerator / denominator
+
+    alpha_matrix = np.outer(alpha_tx, alpha_rx)
+    return alpha_matrix
+
+def phase_calibration(zij_vector: np.ndarray):
+    """
+    使用最小二乘法进行相位校准，并返回校准因子矩阵。
+
+    输入：
+        zij_vector: np.ndarray, 形状为 (n_ant,) 的复数向量，
+                    代表每个通道在目标峰值处的响应。
+
+    输出：
+        phi_matrix: np.ndarray, 形状为 (n_ant, n_ant) 的相位校准因子矩阵。
+    """
+    n_ant = zij_vector.shape[0]
+
+    # 直接使用 zij_vector 的相位作为观测值
+    theta_ij = np.angle(zij_vector)
+
+    # 构建线性方程组 Ax = b
+    num_unknowns = 2 * (n_ant - 1)
+    A = np.zeros((n_ant * n_ant, num_unknowns))
+    b = np.zeros(n_ant * n_ant)
+
+    # 您的虚拟天线映射
+    tx_map = np.array([0, 0, 1, 1])
+    rx_map = np.array([0, 1, 0, 1])
+
+    eq_index = 0
+    for i in range(n_ant):
+        if tx_map[i] > 0:
+            A[eq_index, tx_map[i] - 1] = 1
+        if rx_map[i] > 0:
+            A[eq_index, (n_ant - 1) + rx_map[i] - 1] = 1
+
+        b[eq_index] = theta_ij[i]
+        eq_index += 1
+
+    x, _, _, _ = np.linalg.lstsq(A[:eq_index], b[:eq_index], rcond=None)
+
+    phi_tx = np.zeros(n_ant)
+    phi_rx = np.zeros(n_ant)
+    phi_tx[1:] = x[:n_ant - 1]
+    phi_rx[1:] = x[n_ant - 1:]
+
+    phi_matrix = np.outer(phi_tx, phi_rx)
+    return phi_matrix
+
+def apply_calibration(iq_data: np.ndarray, alpha_matrix: np.ndarray, phi_matrix: np.ndarray):
+    """
+    使用幅度校准矩阵和相位校准矩阵对 IQ 数据进行校准。
+
+    输入：
+        iq_data: np.ndarray, 形状为 (n_ant, n_chirp, n_points)
+        alpha_matrix: np.ndarray, 幅度校准因子矩阵
+        phi_matrix: np.ndarray, 相位校准因子矩阵
+    输出：
+        calibrated_iq: np.ndarray, 校准后的 IQ 数据
+    """
+    n_ant, _, _ = iq_data.shape
+
+    tx_map = np.array([0, 0, 1, 1])
+    rx_map = np.array([0, 1, 0, 1])
+
+    cal_amplitude_vector = alpha_matrix[tx_map, rx_map]
+    cal_phase_vector = phi_matrix[tx_map, rx_map]
+
+    calibrated_iq = iq_data / cal_amplitude_vector[:, np.newaxis, np.newaxis]
+    calibrated_iq *= np.exp(-1j * cal_phase_vector[:, np.newaxis, np.newaxis])
+
+    return calibrated_iq
+
+###==================== 基于复数通道比值法进行IQ校准 ===================
+def complex_channel_calibration(zij_vector: np.ndarray):
+    """
+    使用复数通道比值法进行校准，并返回一个复数校准因子向量。
+
+    输入：
+        zij_vector: np.ndarray, 形状为 (n_ant,) 的复数向量，
+                    代表每个通道在目标峰值处的响应。
+
+    输出：
+        beta_vector: np.ndarray, 形状为 (n_ant,) 的复数校准因子向量。
+    """
+    # 将第一个通道作为基准，其复数校准因子为 1
+    beta_vector = np.ones_like(zij_vector)
+
+    # 找到基准通道的复数值 z00
+    z00 = zij_vector[0]
+
+    # 对于其他通道，计算其相对于基准通道的比值
+    # 这个比值就是每个通道的复数校准因子
+    for i in range(1, len(zij_vector)):
+        beta_vector[i] = zij_vector[i] / z00
+
+    return beta_vector
+
+def apply_complex_calibration(iq_data: np.ndarray, beta_vector: np.ndarray):
+    """
+    使用复数校准因子对 IQ 数据进行校准。
+
+    输入：
+        iq_data: np.ndarray, 形状为 (n_ant, n_chirp, n_points)
+        beta_vector: np.ndarray, 形状为 (n_ant,) 的复数校准因子向量。
+
+    输出：
+        calibrated_iq: np.ndarray, 校准后的 IQ 数据。
+    """
+    # 补偿因子是 beta_vector 的倒数
+    compensation_vector = 1 / beta_vector
+
+    # 将补偿因子广播到 IQ 数据上进行校准
+    # np.newaxis 将一维向量转换为 (n_ant, 1, 1) 的形状，以便广播
+    calibrated_iq = iq_data * compensation_vector[:, np.newaxis, np.newaxis]
+
+    return calibrated_iq
