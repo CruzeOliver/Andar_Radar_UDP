@@ -200,6 +200,13 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.fft_results_1D = Perform1D_FFT(iq)
         self.fft_result_2D = Perform2D_FFT(self.fft_results_1D)
 
+        #根据2dfft结果 进行不同Channel的IQ校准
+        peak_idx = np.unravel_index(np.argmax(np.abs(self.fft_result_2D[0])), self.fft_result_2D[0].shape)
+        zij_vector = self.fft_result_2D[:, peak_idx[0], peak_idx[1]]
+        beta_vector = complex_channel_calibration(zij_vector)
+        if self.checkBox_complex_calibration.isChecked():
+            iq = apply_complex_calibration(iq, beta_vector)
+
         # 判断是否满足显示间隔
         if current_time - self.last_display_time > self.display_interval:
             self.display.update_adc4(iq, chirp, sample)
@@ -345,8 +352,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         # if self.checkBox_2dfft.isChecked():
         #     iq = apply_calibration(iq, alpha_matrix, phi_matrix)
         beta_vector = complex_channel_calibration(zij_vector)
-        # 4. 应用校准
-        if self.checkBox_2dfft.isChecked():
+        if self.checkBox_complex_calibration.isChecked():
             iq = apply_complex_calibration(iq, beta_vector)
 
         self.display.update_adc4(iq, chirp, sample)
