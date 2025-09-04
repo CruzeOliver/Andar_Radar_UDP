@@ -275,7 +275,7 @@ class PgDisplay:
             是否自动设置坐标范围
         批量更新四路“幅度/相位时序”图，并相对 0 通道显示对比：
             - 灰色虚线：0 通道的 |z| 与 phase（同一 chirp/窗口）
-            - 文本指标：ΔAmp(dB) 与 ΔPhase(°)（稳健中位数）
+            - 文本指标：ΔAmp(dB) 与 ΔPhase(°)（采用RMSE）
         """
         assert iq.ndim == 3 and iq.shape[0] == 4, "iq 形状必须是 (4, n_chirp, n_sample)"
         n_chirp, n_sample = iq.shape[1], iq.shape[2]
@@ -358,31 +358,36 @@ class PgDisplay:
 
                 # ΔAmp（dB）：20*log10(|z|/|z_ref|)
                 delta_amp_db = 20.0 * np.log10((a + eps) / (ar + eps))
-                delta_amp_db_med = float(np.nanmedian(delta_amp_db))
+                # 将中位数替换为RMSE
+                # delta_amp_db_med = float(np.nanmedian(delta_amp_db))
+                delta_amp_db_rmse = np.sqrt(np.nanmean(np.square(delta_amp_db)))
 
                 # ΔPhase（度）：(phase - phase_ref)
                 delta_phase = p - pr
                 if not unwrap_phase:
                     # 若未展开，则把相位差规整到 [-pi, pi]
                     delta_phase = (delta_phase + np.pi) % (2*np.pi) - np.pi
-                # 展示更直观：把角度规整到 [-45°, +45°]，避免 ±90° 假象
+
+                # 展示更直观：把角度规整到 [-45°, +45°]
                 delta_phase_deg = np.degrees(delta_phase)
-                delta_phase_deg = np.where(delta_phase_deg >  45, delta_phase_deg - 90, delta_phase_deg)
+                delta_phase_deg = np.where(delta_phase_deg > 45, delta_phase_deg - 90, delta_phase_deg)
                 delta_phase_deg = np.where(delta_phase_deg < -45, delta_phase_deg + 90, delta_phase_deg)
-                delta_phase_deg_med = float(np.nanmedian(delta_phase_deg))
+                # 将中位数替换为RMSE
+                # delta_phase_deg_med = float(np.nanmedian(delta_phase_deg))
+                delta_phase_deg_rmse = np.sqrt(np.nanmean(np.square(delta_phase_deg)))
 
                 # 文本显示（参考通道自身标记为 REF）
                 if ant_idx == ref_idx:
                     text = "REF (Ch0)"
                 else:
-                    text = f"ΔAmp ≈ {delta_amp_db_med:+.2f} dB\nΔPhase ≈ {delta_phase_deg_med:+.1f}°"
+                    text = f"ΔAmp(RMSE) ≈ {delta_amp_db_rmse:.2f} dB\nΔPhase(RMSE) ≈ {delta_phase_deg_rmse:.1f}°"
 
                 # 放到 Amp 图右下角
                 try:
                     vb = h['pw_amp'].getViewBox()
                     (x0, x1), (y0, y1) = vb.state['viewRange'][0], vb.state['viewRange'][1]
                     tx = x1 - 0.02*(x1 - x0)  # 右侧留 2% 边距
-                    ty = y0 + 0.35*(y1 - y0)  # 底部留 8% 边距
+                    ty = y0 + 0.40*(y1 - y0)  # 底部留 40% 边距（这个边距是相对于整个plot的高度，但是plot里有上下两个子图）
                     h['metrics_text'].setPos(tx, ty)
                 except Exception:
                     h['metrics_text'].setPos(t[0] if t.size else 0, (np.nanmax(amp) if amp.size else 1.0))
