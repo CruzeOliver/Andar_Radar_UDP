@@ -349,17 +349,19 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         iq = reorder_frame(frame_data_flat, int(chirp), int(sample))
         self.fft_results_1D = Perform1D_FFT(iq)
         self.fft_result_2D  = Perform2D_FFT(self.fft_results_1D)
-
+        # 根据2dfft结果 将TX和RX 进行分开幅相校准
         peak_idx = np.unravel_index(np.argmax(np.abs(self.fft_result_2D[0])), self.fft_result_2D[0].shape)
         zij_vector = self.fft_result_2D[:, peak_idx[0], peak_idx[1]]
         alpha_matrix = amplitude_calibration(zij_vector)
         phi_matrix = phase_calibration(zij_vector)
+        if self.checkBox_channel_calibration.isChecked():
+            self.checkBox_complex_calibration.setchecked(False)
+            iq = apply_channel_calibration(iq, alpha_matrix, phi_matrix)
+        #根据2dfft结果 对不通过的通道进行整体复数校准
+        beta_vector = complex_channel_calibration(zij_vector)
         if self.checkBox_complex_calibration.isChecked():
-            iq = apply_calibration(iq, alpha_matrix, phi_matrix)
-
-        # beta_vector = complex_channel_calibration(zij_vector)
-        # if self.checkBox_complex_calibration.isChecked():
-        #     iq = apply_complex_calibration(iq, beta_vector)
+            self.checkBox_channel_calibration.setchecked(False)
+            iq = apply_complex_calibration(iq, beta_vector)
 
         self.display.update_adc4(iq, chirp, sample)
         self.display.update_constellations(iq, remove_dc=True, max_points=3000, show_fit=True)

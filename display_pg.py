@@ -574,7 +574,7 @@ class PgDisplay:
             self._set_plot_style(pw_amp)
             pw_amp.addLegend(offset=(10, 10))
             pw_amp.setLabel('bottom', 'Sample')
-            pw_amp.setLabel('left', '|z|')
+            pw_amp.setLabel('left', 'Amplitude')
             pw_amp.setTitle(f"Amp {key}", color='k', size='12pt')
             curve_amp = pw_amp.plot(pen=pg.mkPen('r', width=2), name='Amplitude')
 
@@ -663,20 +663,6 @@ class PgDisplay:
                 'minor_axis': minor_axis,
                 'metrics_text': text_item,
             }
-
-    def _init_fft1d2(self, placeholders: Dict[str, QWidget]):
-        for key, container in placeholders.items():
-            layout = QVBoxLayout(container)
-            pw = pg.PlotWidget()
-            self._set_plot_style(pw)
-            pw.addLegend(offset=(10, 10))
-            pw.setLabel('bottom', 'FFT Bin')
-            pw.setLabel('left', 'Amplitude')
-            pw.setTitle(f"{key}", color='k', size='12pt')
-            layout.addWidget(pw)
-
-            curve = pw.plot(pen=pg.mkPen('r', width=2), name='MAG')
-            self.pg_plot_dict[key] = {'pw': pw, 'MAG': curve}
 
     def _init_fft1d(self, placeholders: Dict[str, QWidget]):
         """

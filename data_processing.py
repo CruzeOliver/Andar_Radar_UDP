@@ -695,7 +695,7 @@ def phase_calibration(
     return phi_matrix
 
 
-def apply_calibration(
+def apply_channel_calibration(
     iq_data: np.ndarray,
     alpha_matrix: np.ndarray,
     phi_matrix: np.ndarray,
