@@ -697,6 +697,13 @@
             </property>
            </widget>
           </item>
+          <item>
+           <widget class="QPushButton" name="pushButton">
+            <property name="text">
+             <string>Save Table</string>
+            </property>
+           </widget>
+          </item>
          </layout>
         </widget>
        </item>
@@ -757,8 +764,8 @@
    <slot>UDP_connect()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>911</x>
-     <y>75</y>
+     <x>1035</x>
+     <y>220</y>
     </hint>
     <hint type="destinationlabel">
      <x>927</x>
@@ -773,8 +780,8 @@
    <slot>UDP_disconnect()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>911</x>
-     <y>104</y>
+     <x>1035</x>
+     <y>249</y>
     </hint>
     <hint type="destinationlabel">
      <x>928</x>
@@ -789,8 +796,8 @@
    <slot>ReadFile()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>853</x>
-     <y>140</y>
+     <x>961</x>
+     <y>548</y>
     </hint>
     <hint type="destinationlabel">
      <x>806</x>
@@ -805,8 +812,8 @@
    <slot>ShowNextFrame()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>961</x>
-     <y>173</y>
+     <x>1035</x>
+     <y>578</y>
     </hint>
     <hint type="destinationlabel">
      <x>805</x>
@@ -821,12 +828,28 @@
    <slot>CloseFile()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>877</x>
-     <y>205</y>
+     <x>1035</x>
+     <y>607</y>
     </hint>
     <hint type="destinationlabel">
      <x>806</x>
      <y>237</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>SaveTable()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>976</x>
+     <y>623</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>865</x>
+     <y>644</y>
     </hint>
    </hints>
   </connection>
@@ -837,5 +860,6 @@
   <slot>ReadFile()</slot>
   <slot>ShowNextFrame()</slot>
   <slot>CloseFile()</slot>
+  <slot>SaveTable()</slot>
  </slots>
 </ui>

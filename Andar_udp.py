@@ -14,6 +14,7 @@ import scipy.io
 import warnings
 from udp_handler import *
 from display_pg import PgDisplay
+import csv
 
 # 加入DPI缩放，可以让GUI，在不同分辨率显示器之间跨越 ，不变形
 QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)  # 启用 DPI 缩放
@@ -97,7 +98,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.comboBox_MatFrom.currentIndex = 0  # 默认选择第一个选项
 
         self.fft_results_1D = None
-        self.fft_result_2D = None
+        self.fft_results_2D = None
         self.frame_all_data = None
         self.frame_data_list = []
         self.rx_thread = None
@@ -203,13 +204,19 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         current_time = time.time()
         iq = reorder_frame(frame, chirp, sample)
         self.fft_results_1D = Perform1D_FFT(iq)
-        self.fft_result_2D = Perform2D_FFT(self.fft_results_1D)
+        self.fft_results_2D = Perform2D_FFT(self.fft_results_1D)
 
-        #根据2dfft结果 进行不同Channel的IQ校准
-        peak_idx = np.unravel_index(np.argmax(np.abs(self.fft_result_2D[0])), self.fft_result_2D[0].shape)
-        zij_vector = self.fft_result_2D[:, peak_idx[0], peak_idx[1]]
-        beta_vector = complex_channel_calibration(zij_vector)
+        #得到2DFFT的峰值索引 对应的zij向量
+        peak_idx = np.unravel_index(np.argmax(np.abs(self.fft_results_2D[0])), self.fft_results_2D[0].shape)
+        zij_vector = self.fft_results_2D[:, peak_idx[0], peak_idx[1]]
+        # 根据2dfft结果 将TX和RX 进行分开幅相校准
+        if self.checkBox_channel_calibration.isChecked():
+            alpha_matrix = amplitude_calibration(zij_vector)
+            phi_matrix = phase_calibration(zij_vector)
+            iq = apply_channel_calibration(iq, alpha_matrix, phi_matrix)
+        #根据2dfft结果 对不通过的通道进行整体复数校准
         if self.checkBox_complex_calibration.isChecked():
+            beta_vector = complex_channel_calibration(zij_vector)
             iq = apply_complex_calibration(iq, beta_vector)
 
         # 判断是否满足显示间隔
@@ -221,12 +228,12 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             if self.checkBox_1dfft.isChecked():
                 self.display.update_fft1d(self.fft_results_1D, sample)
             if self.checkBox_2dfft.isChecked():
-                self.display.update_fft2d(self.fft_result_2D, sample, chirp)
+                self.display.update_fft2d(self.fft_results_2D, sample, chirp)
             self.last_display_time = current_time
         else:
             pass
         R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[0], chirp, sample)
-        az, el, idx, info = estimate_az_el_from_fft2d(self.fft_result_2D)
+        az, el, idx, info = estimate_az_el_from_fft2d(self.fft_results_2D)
         self.display.update_point_cloud_polar("PointCloud", R_macleod, 90.0-az, size=10.0, color='g')
 
         # 更新表格显示距离、角度计算结果
@@ -348,33 +355,32 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
 
         iq = reorder_frame(frame_data_flat, int(chirp), int(sample))
         self.fft_results_1D = Perform1D_FFT(iq)
-        self.fft_result_2D  = Perform2D_FFT(self.fft_results_1D)
+        self.fft_results_2D  = Perform2D_FFT(self.fft_results_1D)
+
+        #得到2DFFT的峰值索引 对应的zij向量
+        peak_idx = np.unravel_index(np.argmax(np.abs(self.fft_results_2D[0])), self.fft_results_2D[0].shape)
+        zij_vector = self.fft_results_2D[:, peak_idx[0], peak_idx[1]]
         # 根据2dfft结果 将TX和RX 进行分开幅相校准
-        peak_idx = np.unravel_index(np.argmax(np.abs(self.fft_result_2D[0])), self.fft_result_2D[0].shape)
-        zij_vector = self.fft_result_2D[:, peak_idx[0], peak_idx[1]]
-        alpha_matrix = amplitude_calibration(zij_vector)
-        phi_matrix = phase_calibration(zij_vector)
         if self.checkBox_channel_calibration.isChecked():
-            self.checkBox_complex_calibration.setchecked(False)
+            alpha_matrix = amplitude_calibration(zij_vector)
+            phi_matrix = phase_calibration(zij_vector)
             iq = apply_channel_calibration(iq, alpha_matrix, phi_matrix)
         #根据2dfft结果 对不通过的通道进行整体复数校准
-        beta_vector = complex_channel_calibration(zij_vector)
         if self.checkBox_complex_calibration.isChecked():
-            self.checkBox_channel_calibration.setchecked(False)
+            beta_vector = complex_channel_calibration(zij_vector)
             iq = apply_complex_calibration(iq, beta_vector)
 
         self.display.update_adc4(iq, chirp, sample)
         self.display.update_constellations(iq, remove_dc=True, max_points=3000, show_fit=True)
         self.display.update_amp_phase(iq, chirp=0, decimate=1, unwrap_phase=False)
 
-
         if self.checkBox_1dfft.isChecked():
             self.display.update_fft1d(self.fft_results_1D, sample)
         if self.checkBox_2dfft.isChecked():
-            self.display.update_fft2d(self.fft_result_2D, sample, chirp)
+            self.display.update_fft2d(self.fft_results_2D, sample, chirp)
 
         R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[0], chirp, sample)
-        az, el, idx, info = estimate_az_el_from_fft2d(self.fft_result_2D)
+        az, el, idx, info = estimate_az_el_from_fft2d(self.fft_results_2D)
         self.display.update_point_cloud_polar("PointCloud", R_macleod, 90.0-az, size=10.0, color='g')
 
         # 更新表格显示距离、角度计算结果
@@ -404,6 +410,39 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.tableWidget_distance.setRowCount(0)
         self.display.reset()
         self.bus.log.emit("已关闭文件，清空数据")
+
+    def SaveTable(self):
+        """
+        将表格中的数据保存到CSV文件。
+        """
+        # 弹出文件对话框让用户选择保存路径和文件名
+        filename, _ = QFileDialog.getSaveFileName(self, "保存数据", "", "CSV Files (*.csv)")
+        if filename:
+            try:
+                with open(filename, 'w', newline='', encoding='utf-8') as file:
+                    writer = csv.writer(file)
+
+                    # 获取表头并写入
+                    header_labels = []
+                    for col in range(self.tableWidget_distance.columnCount()):
+                        header_labels.append(self.tableWidget_distance.horizontalHeaderItem(col).text())
+                    writer.writerow(header_labels)
+
+                    # 遍历所有行和列，写入数据
+                    for row in range(self.tableWidget_distance.rowCount()):
+                        row_data = []
+                        for col in range(self.tableWidget_distance.columnCount()):
+                            item = self.tableWidget_distance.item(row, col)
+                            if item is not None:
+                                row_data.append(item.text())
+                            else:
+                                row_data.append("") # 如果单元格为空，则写入空字符串
+                        writer.writerow(row_data)
+
+                QMessageBox.information(self, "保存成功", f"数据已成功保存到\n{filename}")
+
+            except Exception as e:
+                QMessageBox.critical(self, "保存失败", f"保存文件时出错：\n{e}")
 
     def closeEvent(self, e):
         self.UDP_disconnect()

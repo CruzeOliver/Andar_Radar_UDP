@@ -369,6 +369,9 @@ class Ui_MainWindow(object):
         self.pushButton_CloseFile = QtWidgets.QPushButton(self.groupBox_File)
         self.pushButton_CloseFile.setObjectName("pushButton_CloseFile")
         self.verticalLayout_3.addWidget(self.pushButton_CloseFile)
+        self.pushButton = QtWidgets.QPushButton(self.groupBox_File)
+        self.pushButton.setObjectName("pushButton")
+        self.verticalLayout_3.addWidget(self.pushButton)
         self.verticalLayout.addWidget(self.groupBox_File)
         spacerItem14 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem14)
@@ -403,6 +406,7 @@ class Ui_MainWindow(object):
         self.pushButton_ReadFile.clicked.connect(MainWindow.ReadFile) # type: ignore
         self.pushButton_Next.clicked.connect(MainWindow.ShowNextFrame) # type: ignore
         self.pushButton_CloseFile.clicked.connect(MainWindow.CloseFile) # type: ignore
+        self.pushButton.clicked.connect(MainWindow.SaveTable) # type: ignore
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
@@ -433,3 +437,4 @@ class Ui_MainWindow(object):
         self.pushButton_ReadFile.setText(_translate("MainWindow", "ReadFile"))
         self.pushButton_Next.setText(_translate("MainWindow", "Next Frame"))
         self.pushButton_CloseFile.setText(_translate("MainWindow", "CloseFile/Init"))
+        self.pushButton.setText(_translate("MainWindow", "Save Table"))
