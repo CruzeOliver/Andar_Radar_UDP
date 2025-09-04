@@ -352,13 +352,14 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
 
         peak_idx = np.unravel_index(np.argmax(np.abs(self.fft_result_2D[0])), self.fft_result_2D[0].shape)
         zij_vector = self.fft_result_2D[:, peak_idx[0], peak_idx[1]]
-        # alpha_matrix = amplitude_calibration(zij_vector)
-        # phi_matrix = phase_calibration(zij_vector)
-        # if self.checkBox_2dfft.isChecked():
-        #     iq = apply_calibration(iq, alpha_matrix, phi_matrix)
-        beta_vector = complex_channel_calibration(zij_vector)
+        alpha_matrix = amplitude_calibration(zij_vector)
+        phi_matrix = phase_calibration(zij_vector)
         if self.checkBox_complex_calibration.isChecked():
-            iq = apply_complex_calibration(iq, beta_vector)
+            iq = apply_calibration(iq, alpha_matrix, phi_matrix)
+
+        # beta_vector = complex_channel_calibration(zij_vector)
+        # if self.checkBox_complex_calibration.isChecked():
+        #     iq = apply_complex_calibration(iq, beta_vector)
 
         self.display.update_adc4(iq, chirp, sample)
         self.display.update_constellations(iq, remove_dc=True, max_points=3000, show_fit=True)
