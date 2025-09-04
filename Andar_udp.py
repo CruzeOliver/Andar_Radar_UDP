@@ -3,6 +3,7 @@ import sys, socket, threading
 from dataclasses import dataclass
 from PyQt5.QtCore import QObject, pyqtSignal, QRectF, Qt
 import time
+from PyQt5 import QtCore
 from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox,  QTableWidget, QTableWidgetItem, QHeaderView
 from PyQt5.QtGui import QPixmap, QIcon
 import numpy as np
@@ -13,6 +14,10 @@ import scipy.io
 import warnings
 from udp_handler import *
 from display_pg import PgDisplay
+
+# 加入DPI缩放，可以让GUI，在不同分辨率显示器之间跨越 ，不变形
+QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)  # 启用 DPI 缩放
+QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps)      # 启用高 DPI 图标和图像
 
 # ================== Qt 信号总线 ==================
 class Bus(QObject):
@@ -84,7 +89,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         else:
             self.CJLU_logo_label.setPixmap(pixmap)
             self.CJLU_logo_label.setScaledContents(True)
-        self.setMinimumSize(1800, 1400)
+        self.resize(1800, 1400)
 
         self.pushButton_Disconnect.setEnabled(False)
         options = ["CPP", "Python"]
