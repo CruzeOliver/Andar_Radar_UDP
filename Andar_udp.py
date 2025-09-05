@@ -1,5 +1,6 @@
 from UI.Ui_Radar_UDP import Ui_MainWindow
 import sys, socket, threading
+import os
 from dataclasses import dataclass
 from PyQt5.QtCore import QObject, pyqtSignal, QRectF, Qt
 import time
@@ -106,6 +107,9 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.save_filename = None
         self.current_index = 0
         self.generate_unique_filename()
+        self.zij_vector_list = []
+        self.alpha_matrix = None
+        self.phi_matrix = None
 
         self.last_display_time = time.time()# 记录最后显示的时间
         self.display_interval = 0.8
@@ -248,6 +252,53 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.tableWidget_distance.scrollToBottom()# 滚动到底部
         self.current_index += 1
 
+# ================== 校准部分内容 ==================
+    def calibrate_on_demand(self, zij_vector: np.ndarray):
+        """
+        这是一个类成员方法，它接收 zij_vector，在数量达到阈值时自动触发校准。
+
+        Args:
+            zij_vector: 单帧雷达数据的峰值复数向量。
+        """
+        if zij_vector.shape != (4,):
+            raise ValueError("zij_vector 必须是包含4个元素的向量。")
+
+        self.zij_vector_list.append(zij_vector)
+        current_count = len(self.zij_vector_list)
+
+        if current_count >= 20:  # 达到20个zij_vector后触发校准
+            # 1. 求平均
+            zij_vectors = np.array(self.zij_vector_list)
+            zij_vector_avg = np.mean(zij_vectors, axis=0)
+
+            # 2. 调用校准函数
+            alpha_matrix = amplitude_calibration(zij_vector_avg)
+            phi_matrix = phase_calibration(zij_vector_avg)
+
+            # 3. 保存
+            np.savez("radar_calibration_matrix.npz", alpha=alpha_matrix, phi=phi_matrix)
+
+            # 4. 清空列表，为下一次校准做准备
+            self.zij_vector_list.clear()
+            self.CloseFile()
+            self.UDP_disconnect()
+            QMessageBox.information(self, "校准完成", "已计算并保存校准矩阵到 radar_calibration_matrix.npz 文件。")
+
+    def LoadCalibratioMode(self):
+        """
+        打开文件对话框，选择 .npz 文件并读取数据
+        """
+        file_dialog = QFileDialog(self, "Load Calibration Mode File")
+        file_dialog.setNameFilter("Mode files (*.npz)")
+        if file_dialog.exec_():
+            file_path = file_dialog.selectedFiles()[0]
+            cal_data = np.load(file_path)
+            self.bus.log.emit(f"已加载模型文件：{file_path}")# 打印文件中包含的变量
+            file_name = os.path.basename(file_path)
+            self.lineEdit_ModeName.setText(file_name)
+            self.alpha_matrix = cal_data['alpha']
+            self.phi_matrix = cal_data['phi']
+
 
 # ================== 文件读取部分内容 ==================
     def save_to_mat(self,frame_data, sample_number, chirp_number, filename= None):
@@ -330,7 +381,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             self.current_index = 0  # 初始化为第一帧
             # 获取第一帧的数据
             frame_data = self.frame_all_data[self.frame_data_list[self.current_index]]
-            self.show_matrix(frame_data)  # 显示第一帧
+            self.show_matrix(frame_data)
         except Exception as e:
             print(f"读取文件时出错: {e}")
             QMessageBox.warning(self, "读取失败", f"读取文件失败：{e}")
@@ -356,30 +407,33 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         iq = reorder_frame(frame_data_flat, int(chirp), int(sample))
         self.fft_results_1D = Perform1D_FFT(iq)
         self.fft_results_2D  = Perform2D_FFT(self.fft_results_1D)
+        if self.checkBox_CalibrationMode.isChecked():
+            #得到2DFFT的峰值索引 对应的zij向量
+            peak_idx = np.unravel_index(np.argmax(np.abs(self.fft_results_2D[0])), self.fft_results_2D[0].shape)
+            zij_vector = self.fft_results_2D[:, peak_idx[0], peak_idx[1]]
+            self.calibrate_on_demand(zij_vector)
 
-        #得到2DFFT的峰值索引 对应的zij向量
-        peak_idx = np.unravel_index(np.argmax(np.abs(self.fft_results_2D[0])), self.fft_results_2D[0].shape)
-        zij_vector = self.fft_results_2D[:, peak_idx[0], peak_idx[1]]
         # 根据2dfft结果 将TX和RX 进行分开幅相校准
-        if self.checkBox_channel_calibration.isChecked():
-            alpha_matrix = amplitude_calibration(zij_vector)
-            phi_matrix = phase_calibration(zij_vector)
-            iq = apply_channel_calibration(iq, alpha_matrix, phi_matrix)
-        #根据2dfft结果 对不通过的通道进行整体复数校准
-        if self.checkBox_complex_calibration.isChecked():
-            beta_vector = complex_channel_calibration(zij_vector)
-            iq = apply_complex_calibration(iq, beta_vector)
+        if self.checkBox_channel_calibration.isChecked() and self.alpha_matrix is not None and self.phi_matrix is not None:
+            iq = apply_channel_calibration(iq, self.alpha_matrix, self.phi_matrix)
+        # #根据2dfft结果 对不通过的通道进行整体复数校准
+        # if self.checkBox_complex_calibration.isChecked():
+        #     beta_vector = complex_channel_calibration(zij_vector)
+        #     iq = apply_complex_calibration(iq, beta_vector)
 
         self.display.update_adc4(iq, chirp, sample)
         self.display.update_constellations(iq, remove_dc=True, max_points=3000, show_fit=True)
         self.display.update_amp_phase(iq, chirp=0, decimate=1, unwrap_phase=False)
+        # #对新的IQ数据 重新计算FFT
+        self.fft_results_1D = Perform1D_FFT(iq)
+        self.fft_results_2D = Perform2D_FFT(self.fft_results_1D)
 
         if self.checkBox_1dfft.isChecked():
             self.display.update_fft1d(self.fft_results_1D, sample)
         if self.checkBox_2dfft.isChecked():
             self.display.update_fft2d(self.fft_results_2D, sample, chirp)
 
-        R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[0], chirp, sample)
+        R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[1], chirp, sample)
         az, el, idx, info = estimate_az_el_from_fft2d(self.fft_results_2D)
         self.display.update_point_cloud_polar("PointCloud", R_macleod, 90.0-az, size=10.0, color='g')
 
