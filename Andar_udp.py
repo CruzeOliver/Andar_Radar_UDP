@@ -252,6 +252,16 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.current_index += 1
 
 # ================== 校准部分内容 ==================
+
+# 基于最小二乘法进行幅相校准流程
+# 校准：设备与自反呈0度校准
+# 原始数据（IQ数据）经2D FFT得到含有噪声的测量值（Z_ij_vector_frame）
+# 多帧平均后得到降噪后的测量值（Z_ij_vector_avg）
+# 通过最小二乘模型
+# 得到固定的校准矩阵（alpha_matrix, phi_matrix）
+# 保存校准矩阵到NumPy或者npz
+# 加载校准矩阵到程序
+# 对实时数据进行校准
     def calibrate_on_demand(self, zij_vector: np.ndarray):
         """
         这是一个类成员方法，它接收 zij_vector，在数量达到阈值时自动触发校准。
