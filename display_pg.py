@@ -534,7 +534,7 @@ class PgDisplay:
                 delta_amp_db_rmse = np.sqrt(np.nanmean(np.square(delta_amp_db)))
 
                 # ΔPhase（度）：(phase - phase_ref)
-                delta_phase = np.degrees(p - pr) 
+                delta_phase = np.degrees(p - pr)
 
                 # 如果未展开，将相位差规整到 [-180°, 180°]
                 if not unwrap_phase:

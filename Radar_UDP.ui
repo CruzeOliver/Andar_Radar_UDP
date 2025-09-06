@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1065</width>
+    <width>1226</width>
     <height>943</height>
    </rect>
   </property>
@@ -24,21 +24,7 @@
     <enum>Qt::LeftToRight</enum>
    </property>
    <layout class="QGridLayout" name="gridLayout">
-    <item row="1" column="0">
-     <widget class="Line" name="line">
-      <property name="orientation">
-       <enum>Qt::Horizontal</enum>
-      </property>
-     </widget>
-    </item>
-    <item row="2" column="1">
-     <widget class="Line" name="line_3">
-      <property name="orientation">
-       <enum>Qt::Vertical</enum>
-      </property>
-     </widget>
-    </item>
-    <item row="2" column="0">
+    <item row="3" column="0">
      <widget class="QTabWidget" name="tabWidget_Message">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
@@ -78,10 +64,10 @@
       </widget>
      </widget>
     </item>
-    <item row="0" column="1">
-     <widget class="Line" name="line_4">
+    <item row="1" column="0">
+     <widget class="Line" name="line">
       <property name="orientation">
-       <enum>Qt::Vertical</enum>
+       <enum>Qt::Horizontal</enum>
       </property>
      </widget>
     </item>
@@ -101,7 +87,7 @@
        </font>
       </property>
       <property name="title">
-       <string>Config</string>
+       <string>Setting</string>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout">
        <item>
@@ -207,20 +193,20 @@
        <item>
         <widget class="QGroupBox" name="groupBox_UDP">
          <property name="title">
-          <string>UDP_config</string>
+          <string>UDP</string>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_2">
           <item>
            <widget class="QPushButton" name="pushButton_Connect">
             <property name="text">
-             <string>Connect</string>
+             <string>UDP Connect</string>
             </property>
            </widget>
           </item>
           <item>
            <widget class="QPushButton" name="pushButton_Disconnect">
             <property name="text">
-             <string>Disconnect</string>
+             <string>UDP Disconnect</string>
             </property>
            </widget>
           </item>
@@ -345,7 +331,7 @@
        <item>
         <widget class="QGroupBox" name="groupBox_calibration">
          <property name="title">
-          <string>Calibration__config</string>
+          <string>Calibration</string>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_5">
           <item>
@@ -366,52 +352,12 @@
             <item>
              <widget class="QLineEdit" name="lineEdit_ModeName">
               <property name="sizePolicy">
-               <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+               <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
                 <horstretch>5</horstretch>
                 <verstretch>0</verstretch>
                </sizepolicy>
               </property>
              </widget>
-            </item>
-           </layout>
-          </item>
-          <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_8">
-            <item>
-             <spacer name="horizontalSpacer_9">
-              <property name="orientation">
-               <enum>Qt::Horizontal</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>40</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
-            </item>
-            <item>
-             <widget class="QCheckBox" name="checkBox_complex_calibration">
-              <property name="layoutDirection">
-               <enum>Qt::RightToLeft</enum>
-              </property>
-              <property name="text">
-               <string>Complex_Calibration</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <spacer name="horizontalSpacer_10">
-              <property name="orientation">
-               <enum>Qt::Horizontal</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>40</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
             </item>
            </layout>
           </item>
@@ -468,7 +414,7 @@
        <item>
         <widget class="QGroupBox" name="groupBox_Display">
          <property name="title">
-          <string>Diaplay_config</string>
+          <string>Diaplay</string>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_4">
           <item>
@@ -583,7 +529,7 @@
        <item>
         <widget class="QGroupBox" name="groupBox_File">
          <property name="title">
-          <string>File_config</string>
+          <string>File</string>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_3">
           <item>
@@ -597,7 +543,7 @@
                </sizepolicy>
               </property>
               <property name="text">
-               <string>ReadFile</string>
+               <string>Read File</string>
               </property>
              </widget>
             </item>
@@ -644,6 +590,20 @@
         </spacer>
        </item>
       </layout>
+     </widget>
+    </item>
+    <item row="3" column="1">
+     <widget class="Line" name="line_3">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+     </widget>
+    </item>
+    <item row="0" column="1">
+     <widget class="Line" name="line_4">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
      </widget>
     </item>
     <item row="0" column="0">
@@ -812,7 +772,7 @@
       </property>
      </widget>
     </item>
-    <item row="2" column="2">
+    <item row="3" column="2">
      <widget class="QFrame" name="frame">
       <property name="frameShape">
        <enum>QFrame::StyledPanel</enum>
@@ -829,15 +789,15 @@
    <zorder>line_4</zorder>
    <zorder>line_2</zorder>
    <zorder>groupBox_Config</zorder>
-   <zorder>frame</zorder>
    <zorder>tabWidget_Message</zorder>
+   <zorder>frame</zorder>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1065</width>
+     <width>1226</width>
      <height>22</height>
     </rect>
    </property>

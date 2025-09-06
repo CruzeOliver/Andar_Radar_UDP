@@ -502,10 +502,6 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         else:
             # 如果不校准，则直接使用原始iq数据
             calibrated_iq = iq
-        # #根据2dfft结果 对不通过的通道进行整体复数校准
-        # if self.checkBox_complex_calibration.isChecked():
-        #     beta_vector = complex_channel_calibration(zij_vector)
-        #     iq = apply_complex_calibration(iq, beta_vector)
 
         self.display.update_adc4(calibrated_iq, chirp, sample)
         self.display.update_constellations(calibrated_iq, remove_dc=True, max_points=3000, show_fit=True)
