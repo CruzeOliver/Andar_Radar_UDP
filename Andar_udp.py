@@ -83,7 +83,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setupUi(self)
-        self.setWindowTitle("Radar UDP Interface V3.1")
+        self.setWindowTitle("Radar UDP Interface V3.2")
         self.setWindowIcon(QIcon('Radar_UDP_icon.png'))
         pixmap = QPixmap(r'CJLU_logo.png')
         if pixmap.isNull():
