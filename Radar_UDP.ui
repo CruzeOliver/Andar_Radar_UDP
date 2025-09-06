@@ -251,7 +251,23 @@
                <enum>Qt::RightToLeft</enum>
               </property>
               <property name="text">
-               <string>Is_SaveMat</string>
+               <string>SaveMat</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QCheckBox" name="checkBox_HammingWindow">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="layoutDirection">
+               <enum>Qt::RightToLeft</enum>
+              </property>
+              <property name="text">
+               <string>Hamming</string>
               </property>
              </widget>
             </item>
