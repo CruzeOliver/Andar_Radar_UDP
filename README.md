@@ -1,332 +1,298 @@
+# Project Name: Andar_GUi_UDP
 
+## Introduction
 
-# 项目名称：Andar_GUi_UDP
+This project is a Python-based desktop application for real-time acquisition (data transmission via UDP), processing, and visualization of radar data. It uses `PyQt` to build the user interface and `PyQtGraph` for efficient graphical display. Main features include:
 
-## 简介
+- Real-time display of raw ADC data from four virtual antennas.
+- Real-time display of constellation diagrams for four virtual antennas.
+- Real-time display of amplitude and phase fluctuation diagrams for four virtual antennas.
+- Real-time calculation and display of 1D FFT results.
+- Real-time calculation and display of 2D FFT (range-Doppler) results.
+- Real-time calculation and display of 2D point clouds.
+- Support for saving real-time data to `.mat` files.
 
+This program is specially optimized for radar signal processing. With the high-performance drawing capability of `PyQtGraph`, it ensures smooth GUI experience even when handling high frame rate data.
 
+## Project Structure
 
-这个项目是一个基于 Python 的桌面应用程序，用于实时采集（通过UDP进行数据传输）、处理和可视化雷达数据。它利用 `PyQt` 构建用户界面，并使用 `PyQtGraph` 进行高效的图形显示。主要功能包括：
+Core files of the project may include:
 
-- 实时显示四路虚拟天线的 ADC 原始数据。
-- 实时显示四路虚拟天线的”星座图“。
-- 实时显示四路虚拟天线的幅值、相位波动图。
-- 实时计算并显示 1D FFT 结果。
-- 实时计算并显示 2D FFT（距离-多普勒）结果。
-- 实时计算并显示2D 点云。
-- 支持将实时数据保存到 `.mat` 文件中。
+- `Andar_udp.py`: Main program file, containing GUI and data processing logic.
+- `Radar_UDP.ui`: UI file designed with Qt Designer.
+- `data_processing.py`: Mainly contains radar IQ data reorganization, 1D FFT, 2D FFT, etc.
+- `display_pg.py`: Mainly for GUI binding, initialization, and display calls.
+- `udp_handler.py`: UDP signal transmission and related work.
+- `raw_data.mat`: Radar raw data file saved by the program.
 
-本程序特别针对雷达信号处理进行了优化，利用 `PyQtGraph` 的高性能绘图能力，确保在处理高帧率数据时界面的流畅性。
+## How to Run
 
+### 1. Dependencies
 
+Before running the project, please make sure you have installed all necessary Python libraries. You can use `pip` to install them:
 
-## 项目结构
-
-
-
-项目的核心文件可能包括：
-
-- `Andar_udp.py`：主程序文件，包含 GUI 界面和数据处理逻辑。
-- `Radar_UDP.ui`：Qt Designer 设计的界面文件。
-- `data_processing.py`：主要是包含对于雷达IQ数据进行重组、1DFFT、2DFFT等处理。
-- `display_pg.py`：主要是用于图形界面绑定、初始化、显示调用等功能。
-- `udp_handler.py`：UDP信号传输等相关工作。
-- `raw_data.mat`：程序保存的雷达原始数据文件。
-
-
-
-## 如何运行
-
-### 1. 依赖库
-
-在运行项目之前，请确保你已经安装了所有必要的 Python 库。你可以使用 `pip` 来安装它们：
-
-Bash
-
-```
+```bash
 pip install PyQt5 pyqtgraph numpy scipy
 ```
 
-- **`PyQt5`**：用于构建图形用户界面。
-- **`pyqtgraph`**：用于高性能的科学绘图。
-- **`numpy`**：用于处理数值数组。
-- **`scipy`**：用于加载和保存 `.mat` 文件。
+- **`PyQt5`**: For building the graphical user interface.
+- **`pyqtgraph`**: For high-performance scientific plotting.
+- **`numpy`**: For numerical array processing.
+- **`scipy`**: For loading and saving `.mat` files.
 
+### 2. Run the Program
 
-
-### 2. 运行程序
-
-安装完依赖后，直接运行主程序文件即可：
+After installing the dependencies, simply run the main program file:
 
 ```
 python Andar_udp.py
 ```
 
+### 3. Data Saving
 
+The program supports saving real-time data to `.mat` files. Each time the program starts, it automatically generates a `.mat` file named with the current timestamp, such as `2025_08_20_14_30_00_raw_data_py.mat`, and all processed frame data will be appended to this file.
 
-### 3. 数据保存
+## Main Features
 
-程序支持将实时数据保存到 `.mat` 文件。在每次启动程序时，会自动生成一个以当前时间戳命名的 `.mat` 文件，例如 `2025_08_20_14_30_00_raw_data_py.mat`，所有处理的帧数据都会被追加到这个文件中。
+### Transmission Protocol: UDP
 
+Packet length: 1024 bytes
 
+Data type: Big-endian
 
-## 主要功能
+First Frame (1024 bytes):
 
-### 传输协议：UDP
-包长：1024byte
-
-数据类型：大端序
-
-First Frame（1024byte）：
-
-|    4byte 	  |     4byte   	  |    4byte  	  |    4byte  	 |    4byte    	|   4byte	   |
+|    4 bytes    |    4 bytes    |    4 bytes    |    4 bytes    |    4 bytes    |    4 bytes    |
 
 FirstNumber     SecondNumber         FrameID            ChirpNum     Sample_POINT      TXRXTYPE
 
-其余补零（1000byte）
+The rest are padded with zeros (1000 bytes)
 
 FirstNumber : 0x11223344
 
 SecondNumber : 0x44332211
 
-FrameID : 发送完ADC采样一次的所有数据自增加一（最大0xFFFFFFFF）
+FrameID : Increments by one after sending all ADC sampled data once (max 0xFFFFFFFF)
 
-ChirpNum : 下位机配置信息（例：64）
+ChirpNum : Configuration from the lower computer (e.g., 64)
 
-Sample_POINT : 下位机配置信息（例：128）
+Sample_POINT : Configuration from the lower computer (e.g., 128)
 
-TXRXTYPE : 下位机配置信息（例：1）
+TXRXTYPE : Configuration from the lower computer (e.g., 1)
 
-仅有三种模式：TX1RX1（1）、TX1RX2（2）、TX2RX2（4）
+Only three modes: TX1RX1 (1), TX1RX2 (2), TX2RX2 (4)
 
-Other Frame（1024byte）：纯ADC数据
-
-------
-
-
-
-### 实时 ADC 数据 （tab page：ADC-T2R2）
-
-用于显示 **原始 I/Q 通道的时域波形**。
- 每个通道分别绘制 I 路（红色）和 Q 路（蓝色），便于实时观察信号质量、直流偏移和噪声水平。
-
-**主要特点：**
-
-- **四通道独立显示**
-   对应四个虚拟天线（TX0RX0、TX0RX1、TX1RX0、TX1RX1），每个通道单独一张波形图。
-- **I/Q 分离绘制**
-   I/Q 分别用红色和蓝色曲线显示，方便对比幅度和相位关系。
-- **自动缩放**
-   X 轴自动锁定采样点范围，Y 轴可根据幅度变化自适应。
-- **实时刷新**
-   每帧更新一次，只显示最新数据，不叠加历史波形。
-
-**使用场景：**
-
-- 检查接收信号是否过饱和或过弱。
-
-- 判断硬件链路是否存在直流偏移。
-
-- 观察噪声水平和信号稳定性。
-
-
+Other Frame (1024 bytes): Pure ADC data
 
 ------
 
-### **Amp/Phase 时序图 (tab page：Amp/Phase)**
+### Real-time ADC Data (tab page: ADC-T2R2)
 
-该功能展示了每个虚拟天线的 **幅度 (Amplitude)** 和 **相位 (Phase)** 的变化。它提供了直观的时域信号分析，帮助用户观察信号的稳定性，特别是在进行 **幅相校准** 时，此功能对于验证校准效果尤为重要。
+Displays **time-domain waveforms of raw I/Q channels**.
+Each channel plots I (red) and Q (blue) separately for real-time observation of signal quality, DC offset, and noise level.
 
-#### **主要特点：**
+**Main Features:**
 
-- **多通道支持：**
-   支持 4 个虚拟天线（TX0RX0、TX0RX1、TX1RX0、TX1RX1），每个天线有独立的幅度和相位时序图。用户可以同时观察多个通道的幅度/相位变化。
-- **幅度图 (Amplitude)：**
-   绘制信号幅度随时间的变化，显示信号的 **强度**（或者能量）。可以观察到是否存在 **幅度波动**。
-- **相位图 (Phase)：**
-   绘制信号相位随时间的变化，通常用于观察 **相位的稳定性**。理想情况下，相位应线性变化，若出现跳跃（相位抖动、频偏等），可能表示信号存在问题。此图可以帮助分析 **相位不一致性**，并检查不同天线之间的 **相位偏差**。
-- **去直流 (DC Removal)：**
-   提供 **去直流分量** 的选项，自动去除信号中的 **直流偏移**，使幅度图和相位图更加平稳，尤其在进行校准时，这可以确保信号的 **零点** 处于正确的位置。
-- **实时更新：**
-   每次接收新的数据时，幅度和相位图都会自动更新，确保显示最新的信号状态。每个 **frame**（默认显示chirp 0） 会有独立的时序图更新，用户可以看到信号随时间的动态变化。
-- **自动缩放：**
-   自动根据幅度和相位数据调整坐标范围，确保图形始终居中显示。幅度图和相位图的 Y 轴范围会根据实际数据自适应调整，避免出现图形显示不完整的情况。
-- **幅相对比：**
+- **Four-channel independent display**
+   Corresponds to four virtual antennas (TX0RX0, TX0RX1, TX1RX0, TX1RX1), each with its own waveform plot.
+- **I/Q separated plotting**
+   I and Q are displayed with red and blue curves, respectively, for easy comparison of amplitude and phase.
+- **Auto-scaling**
+   X-axis automatically locks to the sample point range, Y-axis adapts to amplitude changes.
+- **Real-time refresh**
+   Updates once per frame, only shows the latest data, no overlay of historical waveforms.
 
-   根据0通道（tx0rx0）为基准，其他三路通道与0通道进行幅相对比，并将4路通道的幅值和相位与0通道作差后，取出稳健中位数，得到ΔAmp与ΔPhase。
+**Use Cases:**
 
-#### **使用场景：**
+- Check if the received signal is saturated or too weak.
+- Determine if there is DC offset in the hardware link.
+- Observe noise level and signal stability.
 
-- **信号质量分析：**
-   通过观察 **幅度图**，可以了解信号的强度是否稳定，是否存在幅度不均的现象，特别是在信号衰减或饱和时。
-   通过观察 **相位图**，可以直观地查看信号相位的变化是否线性，是否存在相位抖动或者频偏等问题。
-- **幅相一致性检查：**
-   在 **幅相校准** 过程中，幅度和相位时序图可以帮助用户判断 **I/Q 通道的幅度和相位** 是否一致。
-   通过 **相位图**，可以检查不同天线之间是否存在 **相位偏差**，是否需要进行校准。
-- **实时监控：**
-   用于 **实时信号监控**，特别是在雷达信号采集、无线通信测试等应用场景中，用户可以利用这些图形动态观察信号的变化，并及时调整参数。
+------
 
-#### **功能概述：**
+### **Amp/Phase Timing Diagram (tab page: Amp/Phase)**
 
-- **幅度图** 展示了 I/Q 信号的 **幅度** 随时间的变化。
+This feature shows the **amplitude** and **phase** changes for each virtual antenna, providing intuitive time-domain signal analysis to help observe signal stability. This is especially important for verifying calibration effects during **amplitude and phase calibration**.
 
-- **相位图** 展示了 I/Q 信号的 **相位** 随时间的变化，通常用于分析信号的 **相位线性度** 和 **频偏**。
+#### **Main Features:**
 
-- 提供了 **去直流** 选项，去除信号中的直流分量，确保信号的稳定性。
+- **Multi-channel support:**
+   Supports 4 virtual antennas (TX0RX0, TX0RX1, TX1RX0, TX1RX1), each with independent amplitude and phase timing diagrams. Users can observe amplitude/phase changes of multiple channels simultaneously.
+- **Amplitude diagram:**
+   Plots amplitude changes over time, showing signal **strength** (or energy). Useful for observing amplitude fluctuations.
+- **Phase diagram:**
+   Plots phase changes over time, usually to observe **phase stability**. Ideally, phase should change linearly; jumps may indicate phase jitter or frequency offset.
+- **DC removal:**
+   Provides an option to **remove DC component**, making amplitude and phase diagrams smoother. This ensures the signal's zero point is correct, especially during calibration.
+- **Real-time update:**
+   Updates amplitude and phase diagrams with each new data frame, ensuring the latest signal status is displayed. Each **frame** (default shows chirp 0) has an independent timing diagram update.
+- **Auto-scaling:**
+   Automatically adjusts coordinate ranges based on amplitude and phase data, ensuring the graph is always centered. Y-axis range adapts to actual data to avoid incomplete display.
+- **Amplitude/phase comparison:**
+   Uses channel 0 (tx0rx0) as a reference, compares amplitude and phase of the other three channels with channel 0, and calculates robust median differences to obtain ΔAmp and ΔPhase.
 
-- 实时更新数据，并根据数据自动调整坐标范围。
+#### **Use Cases:**
 
-- 每个虚拟天线有独立的幅度/相位时序图，帮助用户分析每个通道的信号质量。
+- **Signal quality analysis:**
+   Observe amplitude diagram for signal strength stability and amplitude unevenness, especially during signal attenuation or saturation.
+   Observe phase diagram for linearity and phase jitter or frequency offset.
+- **Amplitude/phase consistency check:**
+   During **amplitude/phase calibration**, amplitude and phase timing diagrams help judge if I/Q channel amplitude and phase are consistent.
+   Phase diagrams help check for phase bias between antennas and whether calibration is needed.
+- **Real-time monitoring:**
+   For **real-time signal monitoring**, especially in radar signal acquisition or wireless communication testing, users can dynamically observe signal changes and adjust parameters in time.
+
+#### **Feature Overview:**
+
+- **Amplitude diagram** shows the **amplitude** of I/Q signals over time.
+
+- **Phase diagram** shows the **phase** of I/Q signals over time, usually for analyzing phase linearity and frequency offset.
+
+- Provides **DC removal** option to ensure signal stability.
+
+- Real-time data update and auto-scaling.
+
+- Each virtual antenna has independent amplitude/phase timing diagrams for signal quality analysis.
 
   ------
 
-### 星座图显示功能 <椭圆拟合>(tab page：Constellation Diagram)
+### Constellation Diagram Display (tab page: Constellation Diagram)
 
-软件现已支持 **星座图实时显示**，用于可视化各天线通道的 I/Q 分布情况。
+The software now supports **real-time constellation diagram display** for visualizing the I/Q distribution of each antenna channel.
 
-**主要特点：**
+**Main Features:**
 
-- **多通道支持**
-  对应 4 个虚拟天线（TX0RX0、TX0RX1、TX1RX0、TX1RX1），每个通道独立星座图窗口。
-- **实时刷新**
-  每帧数据自动更新，采用覆盖模式，不会叠加历史点。
-- **直流去除 (remove DC)**
-  默认去掉直流偏移，避免星座中心漂移。
-- **参考圆显示**
-  根据 RMS 半径绘制参考圆，辅助判断幅度是否一致。
-- **自适应缩放**
-  自动调整坐标范围，内部对 NaN/Inf 做防护，避免溢出警告。
-- **高效绘制**
-  点数过多时自动抽样 (`max_points=4000`)，保证绘制流畅。
+- **Multi-channel support**
+  Four virtual antennas (TX0RX0, TX0RX1, TX1RX0, TX1RX1), each with an independent constellation diagram window.
+- **Real-time refresh**
+  Each frame automatically updates, using overwrite mode (no overlay of historical points).
+- **DC removal**
+  Removes DC offset by default to avoid constellation center drift.
+- **Reference circle display**
+  Draws a reference circle based on RMS radius to help judge amplitude consistency.
+- **Auto-scaling**
+  Automatically adjusts coordinate range, with internal protection against NaN/Inf to avoid overflow warnings.
+- **Efficient plotting**
+  Automatically samples when there are too many points (`max_points=4000`) to ensure smooth plotting.
 
-**椭圆拟合：**
+**Ellipse Fitting:**
 
-在星座图的基础上，增加 **椭圆拟合**，用于定量分析 I/Q 信号的 **幅度一致性** 和 **相位正交性**。
+Based on the constellation diagram, **ellipse fitting** is added for quantitative analysis of I/Q signal **amplitude consistency** and **phase orthogonality**.
 
-#### **拟合指标：**
+#### **Fitting Metrics:**
 
-- **长短轴比 (axis_ratio b/a)**
-  - 定义：椭圆短轴 / 长轴。
-  - 含义：衡量 I/Q 幅度一致性。
-    - 接近 1.0 → 分布近似圆，幅度匹配良好。
-    - 越小 → 椭圆越扁，说明幅度失配或通道相关性大。
-- **倾角 (tilt)**
-  - 定义：椭圆主轴相对 I 轴的旋转角度。
-  - 含义：衡量 I/Q 正交性。
-    - 理想情况下应接近 0°。
-    - 若 tilt ≠ 0°，说明存在相位误差。
-  - 注意：当分布接近圆形时（axis_ratio ≈ 1），倾角方向可能不稳定，数值会出现 ±90° 的跳变。
-     为了直观表示实际偏差，代码已将 tilt **规整到 [-45°, +45°] 区间**。
+- **Axis ratio (b/a)**
+  - Definition: Ellipse minor axis / major axis.
+  - Meaning: Measures I/Q amplitude consistency.
+    - Close to 1.0 → Distribution is nearly circular, good amplitude match.
+    - Smaller → More elliptical, indicating amplitude mismatch or high channel correlation.
+- **Tilt**
+  - Definition: Rotation angle of the ellipse's major axis relative to the I axis.
+  - Meaning: Measures I/Q orthogonality.
+    - Ideally should be close to 0°.
+    - If tilt ≠ 0°, indicates phase error.
+  - Note: When the distribution is nearly circular (axis_ratio ≈ 1), tilt direction may be unstable, with ±90° jumps. The code normalizes tilt to the [-45°, +45°] range for intuitive display.
 
-#### **图形元素：**
+#### **Graphical Elements:**
 
-- **蓝色散点**：I/Q 实际分布。
-- **红色虚线圆**：RMS 参考圆。
-- **绿色椭圆**：PCA 拟合结果。
-- **绿色线段**：主轴和次轴方向。
-- **右上角文字**：显示 `axis_ratio` 与 `tilt` 数值。
+- **Blue scatter**: Actual I/Q distribution.
+- **Red dashed circle**: RMS reference circle.
+- **Green ellipse**: PCA fitting result.
+- **Green line segments**: Major and minor axis directions.
+- **Text in upper right**: Displays `axis_ratio` and `tilt` values.
 
-**使用场景：**
+**Use Cases:**
 
-- 调试 I/Q 通道正交性。
-
-- 观察接收信号的分布形态（理想情况下应为圆或点簇）。
-
-- 配合 ADC/FFT 一起分析，快速定位硬件链路异常。
-
-  ------
-
-
-
-### 1D FFT（距离谱） （tab page：1D-FFT-T2R2）
-
-对每个天线的 **ADC 时域信号做快速傅里叶变换 (FFT)**，展示目标在距离维度上的能量分布。
-
-**主要特点：**
-
-- **四通道支持**
-   每个天线单独显示 1D FFT 的幅度谱。
-- **幅度谱显示**
-   Y 轴为幅度，X 轴为 FFT bin（对应距离）。
-- **自动截取有效范围**
-   只显示一半频谱（0 ~ N/2 bin），避免频谱镜像。
-- **实时刷新**
-   每帧自动更新，显示当前场景的最新距离信息。
-
-**使用场景：**
-
-- 获取目标的距离信息（峰值位置 = 目标距离）。
-- 对比不同天线的回波强度。
-- 辅助调试天线通道一致性。
+- Debugging I/Q channel orthogonality.
+- Observing the distribution of received signals (ideally a circle or cluster).
+- Combined with ADC/FFT for quick hardware link troubleshooting.
 
 ------
 
-### 2D FFT（距离-多普勒谱） （tab page：2D-FFT-T2R2）
+### 1D FFT (Range Spectrum) (tab page: 1D-FFT-T2R2)
 
-在 1D FFT 基础上，对 chirp 维度再做一次 FFT，生成 **距离-速度二维谱**（也称 Range-Doppler Map）。
+Performs **fast Fourier transform (FFT)** on the ADC time-domain signal of each antenna, showing the energy distribution in the range dimension.
 
-**主要特点：**
+**Main Features:**
 
-- **二维热力图显示**
-   X 轴 = 多普勒频率（速度），Y 轴 = 距离 bin。
-- **对数显示**
-   显示 `log10(|信号|)`，更容易观察弱目标。
-- **零速居中**
-   多普勒零点经过 FFT shift 移到中间，静止目标位于图像中心。
-- **四通道独立显示**
-   每个天线各自显示一张 Range-Doppler 热力图。
+- **Four-channel support**
+   Each antenna independently displays the amplitude spectrum of 1D FFT.
+- **Amplitude spectrum display**
+   Y-axis is amplitude, X-axis is FFT bin (corresponding to range).
+- **Auto-cropping of valid range**
+   Only displays half the spectrum (0 ~ N/2 bin) to avoid spectrum mirroring.
+- **Real-time refresh**
+   Updates automatically per frame, showing the latest range information.
 
-**使用场景：**
+**Use Cases:**
 
-- 同时分析目标的 **距离** 与 **速度**。
-- 区分静止物体（多普勒零点）和移动目标（左右两侧）。
-- 观察多径效应或干扰情况。
-
-------
-
-### 2D 点云显示 （tab page：Point Cloud）
-
-根据 FFT 提取的 **目标距离 + 角度** 信息，将目标点绘制在极坐标半圆中。
-
-**主要特点：**
-
-- **极坐标绘制**
-   半圆朝上，X 轴 = 左右方位，Y 轴 = 距离。
-- **缓冲机制 (deque)**
-   每次接收一帧数据只绘制一个点，保存最近 5 帧，先进先出，平滑显示目标运动轨迹。
-- **自适应范围**
-   半径范围由设定的最大量程 `r_max` 控制，角度范围由视场角 (FOV) 控制。
-
-**使用场景：**
-
-- 直观展示目标在二维平面（距离-角度）的分布。
-- 观察目标运动轨迹和角度变化。
-- 配合距离谱/多普勒谱，提供更直观的空间信息。
+- Obtain target range information (peak position = target range).
+- Compare echo strength of different antennas.
+- Assist in debugging antenna channel consistency.
 
 ------
 
-### IQ 校准（幅度与相位）
+### 2D FFT (Range-Doppler Spectrum) (tab page: 2D-FFT-T2R2)
 
-对各天线接收到的 **原始 IQ 数据进行补偿**，消除因硬件差异导致的通道不一致，以获得真实、准确的目标参数。
+Based on 1D FFT, performs another FFT on the chirp dimension to generate a **range-velocity 2D spectrum** (also called Range-Doppler Map).
 
-**主要特点：**
+**Main Features:**
 
-- **硬件差异补偿** 消除不同天线在幅度和相位上的固有不平衡，使所有虚拟通道具备一致的响应。
-- **基于最小二乘法** 使用迭代最小二乘法（针对幅度）和线性最小二乘法（针对相位）来稳健地求解校准因子。
-- **一次性校准** 只需在特定环境下（正对点目标）进行一次校准，即可将得到的校准矩阵保存并应用于后续所有数据。
-- **无缝集成** 通过加载校准矩阵，可以在数据处理的**早期阶段**（FFT 前）对所有原始 IQ 数据进行自动校正。
+- **2D heatmap display**
+   X-axis = Doppler frequency (velocity), Y-axis = range bin.
+- **Logarithmic display**
+   Shows `log10(|signal|)` for easier observation of weak targets.
+- **Zero velocity centered**
+   Doppler zero is FFT shifted to the center, stationary targets are in the middle.
+- **Four-channel independent display**
+   Each antenna displays its own Range-Doppler heatmap.
 
-**使用场景：**
+**Use Cases:**
 
-- **改善角度估计精度** 校准后的相位差仅反映目标方位，显著提升 DBF 或 MUSIC 等角度算法的准确性。
+- Analyze target **range** and **velocity** simultaneously.
+- Distinguish stationary objects (Doppler zero) and moving targets (left/right).
+- Observe multipath effects or interference.
 
-- **确保目标强度一致性** 校准后的幅度谱能真实反映目标的回波强度，便于多通道间进行可靠的比较。
+------
 
-- **雷达系统调试** 用于评估和验证天线阵列的通道一致性，是系统集成和验证的关键步骤。
+### 2D Point Cloud Display (tab page: Point Cloud)
 
-  
+Based on FFT-extracted **target range + angle** information, plots target points in a polar semicircle.
 
+**Main Features:**
 
-## 贡献
+- **Polar coordinate plotting**
+   Semicircle faces up, X-axis = left/right azimuth, Y-axis = range.
+- **Buffer mechanism (deque)**
+   Only one point is plotted per frame, keeps the latest 5 frames, FIFO, smoothing the target trajectory.
+- **Adaptive range**
+   Radius range is controlled by the set maximum range `r_max`, angle range by the field of view (FOV).
 
-如果你发现任何问题或有改进建议，欢迎提交 Issue 或 Pull Request。
+**Use Cases:**
+
+- Intuitively display target distribution in 2D (range-angle).
+- Observe target trajectory and angle changes.
+- Combined with range/Doppler spectrum for more intuitive spatial information.
+
+------
+
+### IQ Calibration (Amplitude and Phase)
+
+Compensates the **original IQ data** received by each antenna to eliminate channel inconsistencies caused by hardware differences, obtaining true and accurate target parameters.
+
+**Main Features:**
+
+- **Hardware difference compensation** Eliminates inherent amplitude and phase imbalance among antennas, ensuring consistent response for all virtual channels.
+- **Least squares based** Uses iterative least squares (for amplitude) and linear least squares (for phase) to robustly solve calibration factors.
+- **One-time calibration** Only needs to be performed once in a specific environment (facing a point target), and the calibration matrix can be saved and applied to all subsequent data.
+- **Seamless integration** By loading the calibration matrix, all original IQ data can be automatically corrected at an **early stage** (before FFT) in data processing.
+
+**Use Cases:**
+
+- **Improve angle estimation accuracy** After calibration, phase differences only reflect target direction, significantly improving the accuracy of DBF or MUSIC angle algorithms.
+- **Ensure target intensity consistency** Calibrated amplitude spectrum truly reflects target echo strength, enabling reliable comparison among channels.
+- **Radar system debugging** Used to evaluate and verify channel consistency of antenna arrays, a key step in system integration and verification.
+
+## Contribution
+
+If you find any issues or have suggestions for improvement, feel free to submit an Issue or Pull Request.

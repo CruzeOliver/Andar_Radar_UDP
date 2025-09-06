@@ -51,3 +51,7 @@ bin/Debug/*
 
 *.pyc
 *.mat
+*csv
+*npz
+dist/
+build/
