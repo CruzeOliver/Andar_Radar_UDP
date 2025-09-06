@@ -479,6 +479,7 @@ def amplitude_calibration(zij_vector: np.ndarray):
 
     # 构建幅度校准矩阵（实际发射×接收天线的矩阵）
     alpha_matrix = np.outer(alpha_tx, alpha_rx)
+
     return alpha_matrix
 
 def phase_calibration(
@@ -597,17 +598,26 @@ def apply_channel_calibration(
     if alpha_matrix.shape != (2, 2) or phi_matrix.shape != (2, 2):
         raise ValueError("alpha_matrix和phi_matrix必须为(2,2)矩阵（2发2收）")
 
-    # 提取每个虚拟通道的校准因子
-    alpha_vector = alpha_matrix[tx_map, rx_map]  # 4元素向量（每个虚拟通道的幅度因子）
-    phi_vector = phi_matrix[tx_map, rx_map]      # 4元素向量（每个虚拟通道的相位因子）
+    # 找到参考通道的绝对幅度校准因子
+    # 假设 tx0, rx0 是参考通道，其在 alpha_matrix 中的索引为 [0, 0]
+    ref_alpha = alpha_matrix[0, 0]
 
-    # 幅度补偿（消除通道间幅度差异）
+    # 将每个通道的绝对校准因子转换为相对校准因子
+    # 这样，所有通道都会相对于参考通道进行校准
+    relative_alpha_matrix = alpha_matrix / ref_alpha
+
+    # 提取每个虚拟通道的相对校准因子
+    alpha_vector = relative_alpha_matrix[tx_map, rx_map] # 4元素向量（每个虚拟通道的幅度因子）
+    phi_vector = phi_matrix[tx_map, rx_map] # 4元素向量（每个虚拟通道的幅度因子）
+
+    # 幅度补偿：乘以 1.0 / 相对校准因子
+    # 这会使校准后的幅度都与参考通道的幅度一致
     amp_comp = 1.0 / alpha_vector[:, np.newaxis, np.newaxis]
-    # 相位补偿（消除通道间相位差异）
     phase_comp = np.exp(-1j * phi_vector[:, np.newaxis, np.newaxis])
 
     # 应用校准
     calibrated_iq = iq_data * amp_comp * phase_comp
+
     return calibrated_iq
 
 ###==================== 基于复数通道比值法进行IQ校准 ===================

@@ -485,19 +485,22 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
 
         # 根据2dfft结果 将TX和RX 进行分开幅相校准
         if self.checkBox_channel_calibration.isChecked() and self.alpha_matrix is not None and self.phi_matrix is not None:
-            iq = apply_channel_calibration(iq, self.alpha_matrix, self.phi_matrix)
+            # 将校准后的IQ数据赋值给一个新的变量
+            calibrated_iq = apply_channel_calibration(iq, self.alpha_matrix, self.phi_matrix)
             #对新的IQ数据 重新计算FFT
-            self.fft_results_1D = Perform1D_FFT(iq)
+            self.fft_results_1D = Perform1D_FFT(calibrated_iq)
             self.fft_results_2D = Perform2D_FFT(self.fft_results_1D)
-
+        else:
+            # 如果不校准，则直接使用原始iq数据
+            calibrated_iq = iq
         # #根据2dfft结果 对不通过的通道进行整体复数校准
         # if self.checkBox_complex_calibration.isChecked():
         #     beta_vector = complex_channel_calibration(zij_vector)
         #     iq = apply_complex_calibration(iq, beta_vector)
 
-        self.display.update_adc4(iq, chirp, sample)
-        self.display.update_constellations(iq, remove_dc=True, max_points=3000, show_fit=True)
-        self.display.update_amp_phase(iq, chirp=0, decimate=1, unwrap_phase=False)
+        self.display.update_adc4(calibrated_iq, chirp, sample)
+        self.display.update_constellations(calibrated_iq, remove_dc=True, max_points=3000, show_fit=True)
+        self.display.update_amp_phase(calibrated_iq, chirp=0, decimate=1, unwrap_phase=False)
 
         if self.checkBox_1dfft.isChecked():
             self.display.update_fft1d(self.fft_results_1D, sample)

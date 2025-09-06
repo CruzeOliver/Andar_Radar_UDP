@@ -435,13 +435,21 @@ class PgDisplay:
             # 对 chirp 维度做均值处理
             avg_fft = np.mean(fft_results_in[ant_idx, :, :], axis=0)
             mag = np.abs(avg_fft[:max_bin])  # 计算幅度谱
-
             # 找到峰值所在的 bin
             peak_bin = np.argmax(mag)
+
+            # 动态调整 Y 轴范围
+            min_y = 0  # Y轴下限通常为0
+            max_y = np.max(mag) * 1.15  # 找到最大值，并增加15%的裕量
+
+            # 确保最大值不为0，避免绘图异常
+            if max_y == 0:
+                max_y = 1.0  # 如果所有值都为0，则设置一个默认最大值
 
             # 更新幅度图
             h['MAG'].setData(x, mag)
             h['pw'].setXRange(0, max_bin, padding=0.02)
+            h['pw'].setYRange(min_y, max_y, padding=0.02) # 新增：设置Y轴范围
 
             # 在右上角显示峰值 bin
             peak_bin_text = f"Peak Bin: {peak_bin}"  # 显示峰值 bin
@@ -449,6 +457,7 @@ class PgDisplay:
 
             # 设置文本位置为右上角
             try:
+                # 重新获取更新后的视图范围
                 vb = h['pw'].getViewBox()
                 (x0, x1), (y0, y1) = vb.state['viewRange'][0], vb.state['viewRange'][1]
                 tx = x1 - 0.02 * (x1 - x0)  # 右侧 2% 边距
@@ -456,7 +465,6 @@ class PgDisplay:
                 h['metrics_text'].setPos(tx, ty)
             except Exception:
                 pass
-
 
     def update_fft2d(self, fft2d_results: np.ndarray, n_points: int, n_chirp: int):
         """
