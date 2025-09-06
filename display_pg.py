@@ -245,7 +245,7 @@ class PgDisplay:
                 h['minor_axis'].setData([], [])
                 h['metrics_text'].setText("")
 
-    def update_amp_phase(self,
+    def update_amp_phase2(self,
                      iq: np.ndarray,
                      *,
                      chirp: int = 0,
@@ -413,6 +413,173 @@ class PgDisplay:
                         pmin, pmax = -np.pi, np.pi
                 else:
                     pmin, pmax = -np.pi, np.pi
+                pad = 0.05 * (pmax - pmin)
+                h['pw_phase'].setXRange(0, max(1, xmax), padding=0.02)
+                h['pw_phase'].setYRange(pmin - pad, pmax + pad, padding=0.02)
+
+    def update_amp_phase(self,
+                     iq: np.ndarray,
+                     *,
+                     chirp: int = 0,
+                     sample: int | None = None,
+                     key_map: dict | None = None,
+                     unwrap_phase: bool = True,
+                     decimate: int = 1,
+                     remove_dc: bool = False,
+                     autorange: bool = True):
+        """
+        iq : np.ndarray
+            复数 IQ 数据，形状 (4, n_chirp, n_sample)
+        chirp : int
+            选择第几个 chirp 来画时序（默认第 0 个）
+        sample : int | None
+            仅取前 sample 个样点；为 None 则取整条 chirp
+        key_map : dict | None
+            占位键名 -> 天线索引 的映射。默认按当前工程：
+            {'APtx0rx0':0, 'APtx0rx1':1, 'APtx1rx0':2, 'APtx1rx1':3}
+        unwrap_phase : bool
+            是否对相位做 np.unwrap ，如果np.unwrap = true 相位会呈现一条直线，else相位会在 -π 到 π 之间跳变
+        decimate : int
+            下采样因子（>=1）。例如 4 表示每 4 点取 1 点
+        remove_dc : bool
+            是否对 z(t) 去直流（z -= mean(z)）。用于相位更稳的场景
+        autorange : bool
+            是否自动设置坐标范围
+        批量更新四路“幅度/相位时序”图，并相对 0 通道显示对比：
+            - 灰色虚线：0 通道的 |z| 与 phase（同一 chirp/窗口）
+            - 文本指标：ΔAmp(dB) 与 ΔPhase(°)（采用RMSE）
+        """
+        assert iq.ndim == 3 and iq.shape[0] == 4, "iq 形状必须是 (4, n_chirp, n_sample)"
+        n_chirp, n_sample = iq.shape[1], iq.shape[2]
+        if chirp < 0 or chirp >= n_chirp:
+            return
+
+        if key_map is None:
+            key_map = {
+                'APtx0rx0': 0,
+                'APtx0rx1': 1,
+                'APtx1rx0': 2,
+                'APtx1rx1': 3,
+            }
+
+        # 统一抽样窗口
+        end = n_sample if sample is None else min(sample, n_sample)
+        sl = slice(0, end, max(1, decimate))
+
+        # ---------- 准备参考通道（idx=0） ----------
+        ref_idx = 0
+        z_ref = iq[ref_idx, chirp, :end]
+        if remove_dc:
+            mref = np.nanmean(z_ref)
+            if np.isfinite(mref):
+                z_ref = z_ref - mref
+        z_ref = np.nan_to_num(z_ref[sl], nan=0.0, posinf=0.0, neginf=0.0)
+
+        amp_ref = np.abs(z_ref).astype(np.float32)
+        ph_ref  = np.angle(z_ref).astype(np.float32)
+        if unwrap_phase:
+            ph_ref = np.unwrap(ph_ref)
+
+        t_ref = np.arange(z_ref.size, dtype=np.int32)
+        eps = 1e-12  # 防除零
+
+        # ---------- 遍历每个通道 ----------
+        for key, ant_idx in key_map.items():
+            h = self.pg_amp_phase_dict.get(key)
+            if not h:
+                continue
+
+            # 取该通道数据
+            z = iq[ant_idx, chirp, :end]
+            if z.size == 0:
+                h['amp'].setData([], [])
+                h['phase'].setData([], [])
+                h['amp_ref'].setData([], [])
+                h['phase_ref'].setData([], [])
+                if 'metrics_text' in h:
+                    h['metrics_text'].setText("")
+                continue
+
+            if remove_dc:
+                m = np.nanmean(z)
+                if np.isfinite(m):
+                    z = z - m
+
+            z = np.nan_to_num(z[sl], nan=0.0, posinf=0.0, neginf=0.0)
+            amp = np.abs(z).astype(np.float32)
+            ph  = np.angle(z).astype(np.float32)
+            if unwrap_phase:
+                ph = np.unwrap(ph)
+            # 将相位从弧度转换为角度
+            ph_deg = np.degrees(ph)
+
+            t = np.arange(z.size, dtype=np.int32)
+
+            # --- 更新曲线（本通道） ---
+            h['amp'].setData(t, amp)
+            h['phase'].setData(t, ph_deg)
+
+            # --- 画参考通道（同一窗口）的虚线 ---
+            h['amp_ref'].setData(t_ref, amp_ref)
+            h['phase_ref'].setData(t_ref, np.degrees(ph_ref))
+
+            # --- 计算与参考通道的差值：ΔAmp(dB) 与 ΔPhase(°) ---
+            min_len = min(amp.size, amp_ref.size)
+            if min_len >= 8:
+                a = amp[:min_len]; ar = amp_ref[:min_len]
+                p = ph[:min_len];  pr = ph_ref[:min_len]
+
+                # ΔAmp（dB）：20*log10(|z|/|z_ref|)
+                delta_amp_db = 20.0 * np.log10((a + eps) / (ar + eps))
+                delta_amp_db_rmse = np.sqrt(np.nanmean(np.square(delta_amp_db)))
+
+                # ΔPhase（度）：(phase - phase_ref)
+                delta_phase = np.degrees(p - pr) 
+
+                # 如果未展开，将相位差规整到 [-180°, 180°]
+                if not unwrap_phase:
+                    delta_phase = (delta_phase + 180) % 360 - 180
+
+                # 这里你原有对 [-45, 45] 的处理，根据你的需求保留或删除
+                # delta_phase = np.where(delta_phase > 45, delta_phase - 90, delta_phase)
+                # delta_phase = np.where(delta_phase < -45, delta_phase + 90, delta_phase)
+                delta_phase_deg_rmse = np.sqrt(np.nanmean(np.square(delta_phase)))
+
+                if ant_idx == ref_idx:
+                    text = "REF (Ch0)"
+                else:
+                    text = f"ΔAmp(RMSE) ≈ {delta_amp_db_rmse:.2f} dB\nΔPhase(RMSE) ≈ {delta_phase_deg_rmse:.1f}°"
+
+                try:
+                    vb = h['pw_amp'].getViewBox()
+                    (x0, x1), (y0, y1) = vb.state['viewRange'][0], vb.state['viewRange'][1]
+                    tx = x1 - 0.02*(x1 - x0)
+                    ty = y0 + 0.40*(y1 - y0)
+                    h['metrics_text'].setPos(tx, ty)
+                except Exception:
+                    h['metrics_text'].setPos(t[0] if t.size else 0, (np.nanmax(amp) if amp.size else 1.0))
+                h['metrics_text'].setText(text)
+            else:
+                if 'metrics_text' in h:
+                    h['metrics_text'].setText("")
+
+            # --- 自动范围 ---
+            if autorange:
+                # Amp
+                amax = float(np.nanmax(amp)) if amp.size else 1.0
+                amax = 1.0 if (not np.isfinite(amax) or amax < 1e-6) else amax
+                xmax = max(t[-1] if t.size else 1, t_ref[-1] if t_ref.size else 1)
+                h['pw_amp'].setXRange(0, max(1, xmax), padding=0.02)
+                h['pw_amp'].setYRange(0, amax * 1.05, padding=0.02)
+
+                # Phase
+                if ph_deg.size and np.degrees(ph_ref).size:
+                    pmin = float(np.nanmin([np.nanmin(ph_deg), np.nanmin(np.degrees(ph_ref))]))
+                    pmax = float(np.nanmax([np.nanmax(ph_deg), np.nanmax(np.degrees(ph_ref))]))
+                    if not np.isfinite(pmin) or not np.isfinite(pmax) or pmax - pmin < 1e-6:
+                        pmin, pmax = -180.0, 180.0
+                else:
+                    pmin, pmax = -180.0, 180.0
                 pad = 0.05 * (pmax - pmin)
                 h['pw_phase'].setXRange(0, max(1, xmax), padding=0.02)
                 h['pw_phase'].setYRange(pmin - pad, pmax + pad, padding=0.02)

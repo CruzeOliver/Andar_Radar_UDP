@@ -363,11 +363,13 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         if file_dialog.exec_():
             file_path = file_dialog.selectedFiles()[0]
             cal_data = np.load(file_path)
-            self.bus.log.emit(f"已加载模型文件：{file_path}")# 打印文件中包含的变量
+            self.bus.log.emit(f"已加载校准模型文件：{file_path}")
             file_name = os.path.basename(file_path)
             self.lineEdit_ModeName.setText(file_name)
             self.alpha_matrix = cal_data['alpha']
             self.phi_matrix = cal_data['phi']
+            self.bus.log.emit(f"幅度校准矩阵：\n{self.alpha_matrix}")
+            self.bus.log.emit(f"相位校准矩阵：\n{self.phi_matrix}")
 
 
 # ================== 文件读取部分内容 ==================
@@ -536,6 +538,9 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.textEdit_log.clear()  # 清空日志
         self.tableWidget_distance.clearContents()  # 清空表格内容
         self.tableWidget_distance.setRowCount(0)
+        self.lineEdit_ModeName.clear()
+        self.alpha_matrix = None
+        self.phi_matrix = None
         self.display.reset()
         self.bus.log.emit("已关闭文件，清空数据")
 
