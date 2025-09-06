@@ -19,7 +19,7 @@ import csv
 
 # 加入DPI缩放，可以让GUI，在不同分辨率显示器之间跨越 ，不变形
 QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)  # 启用 DPI 缩放
-QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps)      # 启用高 DPI 图标和图像
+QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps)     # 启用高 DPI 图标和图像
 
 # ================== Qt 信号总线 ==================
 class Bus(QObject):
@@ -83,7 +83,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setupUi(self)
-        self.setWindowTitle("Radar UDP Interface")
+        self.setWindowTitle("Radar UDP Interface V3.1")
         self.setWindowIcon(QIcon('Radar_UDP_icon.png'))
         pixmap = QPixmap(r'CJLU_logo.png')
         if pixmap.isNull():
@@ -107,7 +107,10 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.save_filename = None
         self.current_index = 0
         self.generate_unique_filename()
+
         self.zij_vector_list = []
+        self.warmup_count = 0
+        self.warmup_avg = None
         self.alpha_matrix = None
         self.phi_matrix = None
 
@@ -252,19 +255,20 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.current_index += 1
 
 # ================== 校准部分内容 ==================
-
-# 基于最小二乘法进行幅相校准流程
-# 校准：设备与自反呈0度校准
-# 原始数据（IQ数据）经2D FFT得到含有噪声的测量值（Z_ij_vector_frame）
-# 多帧平均后得到降噪后的测量值（Z_ij_vector_avg）
-# 通过最小二乘模型
-# 得到固定的校准矩阵（alpha_matrix, phi_matrix）
-# 保存校准矩阵到NumPy或者npz
-# 加载校准矩阵到程序
-# 对实时数据进行校准
-    def calibrate_on_demand(self, zij_vector: np.ndarray):
+    """
+    基于最小二乘法进行幅相校准流程
+    校准：设备与自反呈0度校准
+    原始数据（IQ数据）经2D FFT得到含有噪声的测量值（Z_ij_vector_frame）
+    多帧平均后得到降噪后的测量值（Z_ij_vector_avg）
+    通过最小二乘模型
+    得到固定的校准矩阵（alpha_matrix, phi_matrix）
+    保存校准矩阵到NumPy或者npz
+    加载校准矩阵到程序
+    对实时数据进行校准
+    """
+    def calibrate_on_demand2(self, zij_vector: np.ndarray):
         """
-        这是一个类成员方法，它接收 zij_vector，在数量达到阈值时自动触发校准。
+        它接收 zij_vector，在数量达到阈值时自动触发校准。
 
         Args:
             zij_vector: 单帧雷达数据的峰值复数向量。
@@ -289,6 +293,63 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
 
             # 4. 清空列表，为下一次校准做准备
             self.zij_vector_list.clear()
+            self.CloseFile()
+            self.UDP_disconnect()
+            QMessageBox.information(self, "校准完成", "已计算并保存校准矩阵到 radar_calibration_matrix.npz 文件。")
+
+    def calibrate_on_demand(self, zij_vector: np.ndarray):
+        """
+        接收 zij_vector，在数量达到阈值时自动触发校准。
+        前20帧用于预热并计算参考平均值，后50帧用于计算校准矩阵。
+        """
+        if zij_vector.shape != (4,):
+            raise ValueError("zij_vector 必须是包含4个元素的向量。")
+
+        # --- 阶段一：雷达预热与基准计算 ---
+        if self.warmup_count < 20:
+            self.zij_vector_list.append(zij_vector)
+            self.warmup_count += 1
+            if self.warmup_count == 20:
+                # 预热阶段结束，计算基准平均值
+                warmup_vectors = np.array(self.zij_vector_list)
+                # 计算每个通道的平均幅值
+                self.warmup_avg = np.mean(np.abs(warmup_vectors), axis=0)
+                # 清空列表，为下一阶段做准备
+                self.zij_vector_list.clear()
+            return
+
+        # --- 阶段二：正式校准与数据过滤 ---
+        if len(self.zij_vector_list) < 50:
+            # 计算当前帧的幅值
+            current_amplitudes = np.abs(zij_vector)
+
+            # 检查幅值是否在预热平均值2倍的范围内
+            # 这里使用 all() 确保所有4个通道都符合条件
+            is_valid = np.all(current_amplitudes <= 2 * self.warmup_avg)
+
+            if is_valid:
+                self.zij_vector_list.append(zij_vector)
+
+        current_count = len(self.zij_vector_list)
+
+        if current_count >= 50:
+            # 1. 计算平均值
+            zij_vectors_to_calibrate = np.array(self.zij_vector_list)
+            zij_vector_avg = np.mean(zij_vectors_to_calibrate, axis=0)
+
+            # 2. 调用校准函数
+            alpha_matrix = amplitude_calibration(zij_vector_avg)
+            phi_matrix = phase_calibration(zij_vector_avg)
+
+            # 3. 保存
+            np.savez("radar_calibration_matrix.npz", alpha=alpha_matrix, phi=phi_matrix)
+
+            # 4. 清空列表并重置状态，为下一次校准做准备
+            self.zij_vector_list.clear()
+            self.warmup_count = 0
+            self.warmup_avg = None
+
+            # 5. 断开连接并提示
             self.CloseFile()
             self.UDP_disconnect()
             QMessageBox.information(self, "校准完成", "已计算并保存校准矩阵到 radar_calibration_matrix.npz 文件。")
