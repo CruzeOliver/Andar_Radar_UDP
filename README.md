@@ -1,4 +1,4 @@
-# Project Name: Andar_GUi_UDP
+# Project Name: FMCW Radar GUI
 
 ## Introduction
 
