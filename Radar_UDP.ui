@@ -345,7 +345,7 @@
                </sizepolicy>
               </property>
               <property name="text">
-               <string>Load Mode</string>
+               <string>Load Model</string>
               </property>
              </widget>
             </item>
