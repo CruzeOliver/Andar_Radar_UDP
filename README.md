@@ -86,7 +86,7 @@ Other Frame (1024 bytes): Pure ADC data
 
 ### Initialize Interface
 
-![init](D:\code\python\Andar_UDP_PY\doc\image\init.png)
+![init](doc/image/init.png)
 
 ------
 
@@ -114,7 +114,7 @@ Each channel plots I (red) and Q (blue) separately for real-time observation of 
 
 ### Real-time ADC Interface
 
-![adc](D:\code\python\Andar_UDP_PY\doc\image\ADC.png)
+![adc](doc/image/ADC.png)
 
 ------
 
@@ -160,7 +160,7 @@ This feature shows the **amplitude** and **phase** changes for each virtual ante
 
 ### Amp/Phase Interface
 
-![amp/phase](D:\code\python\Andar_UDP_PY\doc\image\apmandPhase.png)
+![amp/phase](doc/image/apmandPhase.png)
 
 ------
 
@@ -217,7 +217,7 @@ Based on the constellation diagram, **ellipse fitting** is added for quantitativ
 
 ### Constellation Diagram Interface
 
-![constellation Diagram](D:\code\python\Andar_UDP_PY\doc\image\constellationDiagram.png)
+![constellation Diagram](doc/image/constellationDiagram.png)
 
 ------
 
@@ -244,7 +244,7 @@ Performs **fast Fourier transform (FFT)** on the ADC time-domain signal of each 
 
 ### 1D FFT (Range Spectrum)  Interface
 
-![1D FFT (Range Spectrum) ](D:\code\python\Andar_UDP_PY\doc\image\1dfft.png)
+![1D FFT (Range Spectrum) ](doc/image/1dfft.png)
 
 ------
 
@@ -271,7 +271,7 @@ Based on 1D FFT, performs another FFT on the chirp dimension to generate a **ran
 
 ### 2D FFT (Range-Doppler Spectrum) Interface
 
-![2D FFT (Range-Doppler Spectrum)](D:\code\python\Andar_UDP_PY\doc\image\2dfft.png)
+![2D FFT (Range-Doppler Spectrum)](doc/image/2dfft.png)
 
 ------
 
@@ -296,7 +296,7 @@ Based on FFT-extracted **target range + angle** information, plots target points
 
 ### 2D Point Cloud Interface
 
-![2D Point Cloud](D:\code\python\Andar_UDP_PY\doc\image\Pointcloud.png)
+![2D Point Cloud](doc/image/Pointcloud.png)
 
 ------
 
