@@ -84,6 +84,10 @@ Only three modes: TX1RX1 (1), TX1RX2 (2), TX2RX2 (4)
 
 Other Frame (1024 bytes): Pure ADC data
 
+### Initialize Interface
+
+![init](D:\code\python\Andar_UDP_PY\doc\image\init.png)
+
 ------
 
 ### Real-time ADC Data (tab page: ADC-T2R2)
@@ -107,6 +111,10 @@ Each channel plots I (red) and Q (blue) separately for real-time observation of 
 - Check if the received signal is saturated or too weak.
 - Determine if there is DC offset in the hardware link.
 - Observe noise level and signal stability.
+
+### Real-time ADC Interface
+
+![adc](D:\code\python\Andar_UDP_PY\doc\image\ADC.png)
 
 ------
 
@@ -145,16 +153,16 @@ This feature shows the **amplitude** and **phase** changes for each virtual ante
 #### **Feature Overview:**
 
 - **Amplitude diagram** shows the **amplitude** of I/Q signals over time.
-
 - **Phase diagram** shows the **phase** of I/Q signals over time, usually for analyzing phase linearity and frequency offset.
-
 - Provides **DC removal** option to ensure signal stability.
-
 - Real-time data update and auto-scaling.
-
 - Each virtual antenna has independent amplitude/phase timing diagrams for signal quality analysis.
 
-  ------
+### Amp/Phase Interface
+
+![amp/phase](D:\code\python\Andar_UDP_PY\doc\image\apmandPhase.png)
+
+------
 
 ### Constellation Diagram Display (tab page: Constellation Diagram)
 
@@ -207,6 +215,10 @@ Based on the constellation diagram, **ellipse fitting** is added for quantitativ
 - Observing the distribution of received signals (ideally a circle or cluster).
 - Combined with ADC/FFT for quick hardware link troubleshooting.
 
+### Constellation Diagram Interface
+
+![constellation Diagram](D:\code\python\Andar_UDP_PY\doc\image\constellationDiagram.png)
+
 ------
 
 ### 1D FFT (Range Spectrum) (tab page: 1D-FFT-T2R2)
@@ -229,6 +241,10 @@ Performs **fast Fourier transform (FFT)** on the ADC time-domain signal of each 
 - Obtain target range information (peak position = target range).
 - Compare echo strength of different antennas.
 - Assist in debugging antenna channel consistency.
+
+### 1D FFT (Range Spectrum)  Interface
+
+![1D FFT (Range Spectrum) ](D:\code\python\Andar_UDP_PY\doc\image\1dfft.png)
 
 ------
 
@@ -253,6 +269,10 @@ Based on 1D FFT, performs another FFT on the chirp dimension to generate a **ran
 - Distinguish stationary objects (Doppler zero) and moving targets (left/right).
 - Observe multipath effects or interference.
 
+### 2D FFT (Range-Doppler Spectrum) Interface
+
+![2D FFT (Range-Doppler Spectrum)](D:\code\python\Andar_UDP_PY\doc\image\2dfft.png)
+
 ------
 
 ### 2D Point Cloud Display (tab page: Point Cloud)
@@ -273,6 +293,10 @@ Based on FFT-extracted **target range + angle** information, plots target points
 - Intuitively display target distribution in 2D (range-angle).
 - Observe target trajectory and angle changes.
 - Combined with range/Doppler spectrum for more intuitive spatial information.
+
+### 2D Point Cloud Interface
+
+![2D Point Cloud](D:\code\python\Andar_UDP_PY\doc\image\Pointcloud.png)
 
 ------
 
