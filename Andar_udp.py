@@ -84,8 +84,8 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         super().__init__(parent)
         self.setupUi(self)
         self.setWindowTitle("Radar UDP Interface V3.2")
-        self.setWindowIcon(QIcon('Radar_UDP_icon.png'))
-        pixmap = QPixmap(r'CJLU_logo.png')
+        self.setWindowIcon(QIcon(r'icon\Radar_UDP_icon.png'))
+        pixmap = QPixmap(r'icon\CJLU_logo.png')
         if pixmap.isNull():
             QMessageBox.warning(self, "图像加载失败", "无法加载图像，请检查文件路径是否正确。")
         else:
