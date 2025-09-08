@@ -22,6 +22,7 @@ class PgDisplay:
                  point_cloud_placeholders: Dict[str, QWidget],
                  constellation_placeholders: Dict[str, QWidget],
                  amp_phase_placeholders: Dict[str, QWidget],
+                 waterfall_placeholders: Dict[str, QWidget],
                  *,
                  r_max: float = 6.0,         # 最大量程 (距离)
                  fov_deg: float = 180.0,      # 扇形角度（例如120°）
@@ -42,13 +43,15 @@ class PgDisplay:
         self.pg_cloud_dict: Dict[str, Dict[str, Any]] = {} # Point Cloud 图像
         self.pg_const_dict: Dict[str, Dict[str, Any]] = {} # Constellation Diagram 图像
         self.pg_amp_phase_dict: Dict[str, Dict[str, Any]] = {} # Amp-Phase 图像
+        self.pg_waterfall_dict: Dict[str, Dict[str, Any]] = {} # Waterfall 图像
+
+        self._colormap = self._build_jet_colormap()
 
         self._init_adc(adc_placeholders)
+        self._init_waterfall(waterfall_placeholders)
         self._init_constellation_placeholders(constellation_placeholders)
         self._init_amp_phase(amp_phase_placeholders)
         self._init_fft1d(fft1d_placeholders)
-
-        self._colormap = self._build_jet_colormap()
         self._init_fft2d(fft2d_placeholders)
 
         self._r_max = float(r_max)
@@ -75,6 +78,72 @@ class PgDisplay:
             h['I'].setData(t, I)
             h['Q'].setData(t, Q)
             h['pw'].setXRange(0, sample, padding=0.02)
+
+    def update_waterfall(self, iq: np.ndarray, chirp: int, sample: int, channelstr: str):
+        """
+        使用新的 IQ 数据更新瀑布图（只更新选择的通道数据）。
+
+        参数：
+        - iq: np.ndarray, 形状为 (4, 32, 256)，包含四个天线的 IQ 数据。
+        - chirp: 当前的 chirp 索引（1 到 32）。
+        - sample: 当前的样本数（0 到 255）。
+        - channelstr: str, 选择的天线通道，如 'tx0rx0', 'tx0rx1', 'tx1rx0', 'tx1rx1'。
+        """
+        # waterfall_keys 用于识别瀑布图
+        waterfall_keys = ['Waterfall']
+
+        # 如果 chirp 是从 1 开始计数，需要减去 1
+        chirp = chirp - 1
+
+        # 检查 chirp 和 sample 是否在有效范围内
+        if chirp < 0 or chirp >= iq.shape[1]:
+            raise ValueError(f"Chirp index {chirp + 1} exceeds the available range (1 to {iq.shape[1]}).")
+
+        if sample > iq.shape[2]:
+            raise ValueError(f"Sample index {sample} exceeds the available range (0 to {iq.shape[2] - 1}).")
+
+        # 根据选择的通道获取对应的 IQ 数据
+        channel_map = {
+            'tx0rx0': 0,
+            'tx0rx1': 1,
+            'tx1rx0': 2,
+            'tx1rx1': 3
+        }
+
+        # 检查选择的通道是否有效
+        if channelstr not in channel_map:
+            raise ValueError(f"Invalid channel selected: {channelstr}")
+
+        # 获取选择通道的索引
+        channel_idx = channel_map[channelstr]
+
+        # 获取所选通道的 IQ 数据
+        iq_data = iq[channel_idx, chirp, :sample]
+
+        # 计算幅度数据
+        magnitude = np.abs(iq_data)
+        magnitude = np.flip(magnitude)
+
+        for key in waterfall_keys:
+            h = self.pg_waterfall_dict.get(key)
+            if not h:
+                continue
+
+            # 检查 data_cache 是否已初始化，如果未初始化则进行初始化
+            if 'data_cache' not in h or h['data_cache'].shape[1] != magnitude.size:
+                h['data_cache'] = np.zeros((32, magnitude.size), dtype=np.float32)
+
+            # 滚动数据缓存，保持最新的数据
+            # 将数组向下滚动一行，使第一行成为空
+            h['data_cache'] = np.roll(h['data_cache'], shift=1, axis=0)
+
+            # 将新的数据插入到数组的第一行
+            h['data_cache'][0] = magnitude
+            transposed_data = h['data_cache'].T
+            h['img'].setImage(transposed_data, autoLevels=True)
+
+            # 显示图像
+            h['pw'].show()
 
     def update_constellations(self,
                           iq: np.ndarray,
@@ -735,6 +804,30 @@ class PgDisplay:
             curve_Q = pw.plot(pen=pg.mkPen('b', width=2), name='Q')
             self.pg_plot_dict[key] = {'pw': pw, 'I': curve_I, 'Q': curve_Q}
 
+    def _init_waterfall(self, waterfall_placeholders: Dict[str, QWidget]):
+
+        for name, placeholder in waterfall_placeholders.items():
+            pw = pg.PlotWidget(parent=placeholder)
+            placeholder.setLayout(QVBoxLayout())
+            placeholder.layout().addWidget(pw)
+
+            img_item = pg.ImageItem()
+            pw.addItem(img_item)
+
+            # 使用自定义的colormap
+            img_item.setLookupTable(self._colormap.getLookupTable())
+
+            pw.setLabel('bottom', 'Time (Samples)')
+            pw.setLabel('left', 'Chirp Frame')
+
+            self.pg_waterfall_dict[name] = {
+                'pw': pw,
+                'img': img_item,
+                'data_cache': np.empty((0, 0), dtype=np.float32)
+            }
+            #pw.hide()  # 初始时隐藏，直到数据可用时再显示
+
+
     def _init_amp_phase(self, placeholders: Dict[str, QWidget]):
         """
         为每个占位 QWidget 初始化“幅度/相位时序”双图：
@@ -978,6 +1071,11 @@ class PgDisplay:
                 h['Q'].clear()
             if 'MAG' in h:
                 h['MAG'].clear()
+
+        # 重置瀑布图数据缓存
+        for h in self.pg_waterfall_dict.values():
+            h['data_cache'] = np.empty((0, 0), dtype=np.float32)
+            h['img'].clear()
 
         # 重置 2DFFT 图像
         for iv in self.pg_img_dict.values():

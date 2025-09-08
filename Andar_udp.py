@@ -97,7 +97,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         options = ["CPP", "Python"]
         self.comboBox_MatFrom.addItems(options)
         self.comboBox_MatFrom.currentIndex = 0  # 默认选择第一个选项
-
+        self.channelstr = None
         self.fft_results_1D = None
         self.fft_results_2D = None
         self.frame_all_data = None
@@ -115,7 +115,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.phi_matrix = None
 
         self.last_display_time = time.time()# 记录最后显示的时间
-        self.display_interval = 0.8
+        self.display_interval = 0.6
 
         adc4_keys  = ['tx0rx0', 'tx0rx1', 'tx1rx0', 'tx1rx1']
         fft1d_keys = ['1DFFTtx0rx0', '1DFFTtx0rx1', '1DFFTtx1rx0', '1DFFTtx1rx1']
@@ -123,6 +123,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         point_cloud_keys = ['PointCloud']
         ConstellationDiagram_keys = ['CDtx0rx0', 'CDtx0rx1', 'CDtx1rx0', 'CDtx1rx1']
         amp_phase_keys = ['APtx0rx0', 'APtx0rx1', 'APtx1rx0', 'APtx1rx1']
+        waterfall_keys = ['Waterfall']
 
         adc_placeholders = {k: getattr(self, f'widget_{k}') for k in adc4_keys}
         fft1d_placeholders = {k: getattr(self, f'widget_{k}') for k in fft1d_keys}
@@ -130,6 +131,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         point_cloud_placeholders = {k: getattr(self, f'widget_{k}') for k in point_cloud_keys}
         constellation_placeholders = {k: getattr(self, f'widget_{k}') for k in ConstellationDiagram_keys}
         amp_phase_placeholders = {k: getattr(self, f'widget_{k}') for k in amp_phase_keys}
+        waterfall_placeholders = {k: getattr(self, f'widget_{k}') for k in waterfall_keys}
 
         #GUI显示界面绑定实例化
         self.display = PgDisplay(
@@ -138,13 +140,15 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             fft2d_placeholders = fft2d_placeholders,
             point_cloud_placeholders = point_cloud_placeholders,
             constellation_placeholders = constellation_placeholders,
-            amp_phase_placeholders = amp_phase_placeholders
+            amp_phase_placeholders = amp_phase_placeholders,
+            waterfall_placeholders = waterfall_placeholders
         )
 
         self.bus = Bus()
         self.bus.log.connect(self._log)
         self.bus.frame_ready.connect(self.on_frame_ready)
 
+        self.radioButton_t0r0.setChecked(True)
         self.tableWidget_distance.setColumnCount(6)
         header_labels = ['index','Angel','FFT', 'Macleod', 'CZT FFT Peak', 'CZT Macleod']
         self.tableWidget_distance.setHorizontalHeaderLabels(header_labels)
@@ -152,6 +156,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         # QHeaderView.Stretch 模式会使所有列等宽拉伸，填充可用空间。
         self.tableWidget_distance.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.tableWidget_distance.verticalHeader().setVisible(False)
+
 
     def generate_unique_filename(self):
         """生成一个唯一的 .mat 文件名并保存为实例属性"""
@@ -180,6 +185,8 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             self.tx_sock = None
         if self.checkBox_IsSave.isChecked():
             self.bus.log.emit("[OK] 已启用原始数据保存功能")
+
+
 
     # ---- 断开：停线程 + 关socket ----
     def UDP_disconnect(self):
@@ -216,7 +223,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         iq = reorder_frame(frame, chirp, sample, window=my_window)
         self.fft_results_1D = Perform1D_FFT(iq)
         self.fft_results_2D = Perform2D_FFT(self.fft_results_1D)
-
+        #R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod,diag = calculate_distance_from_iq(iq,r_bins=2,M=128,use_window=None,coherent=True)
         if self.checkBox_CalibrationMode.isChecked():
             #得到2DFFT的峰值索引 对应的zij向量
             peak_idx = np.unravel_index(np.argmax(np.abs(self.fft_results_2D[0])), self.fft_results_2D[0].shape)
@@ -229,9 +236,19 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             self.fft_results_1D = Perform1D_FFT(iq)
             self.fft_results_2D = Perform2D_FFT(self.fft_results_1D)
 
+        if self.radioButton_t0r0.isChecked():
+            self.channelstr = "tx0rx0"
+        elif self.radioButton_t0r1.isChecked():
+            self.channelstr = "tx0rx1"
+        elif self.radioButton_t1r0.isChecked():
+            self.channelstr = "tx1rx0"
+        elif self.radioButton_t1r1.isChecked():
+            self.channelstr = "tx1rx1"
+        self.display.update_waterfall(iq, chirp, sample, self.channelstr)
         # 判断是否满足显示间隔
         if current_time - self.last_display_time > self.display_interval:
             self.display.update_adc4(iq, chirp, sample)
+
             self.display.update_constellations(iq, remove_dc=True, max_points=3000, show_fit=True)
             self.display.update_amp_phase(iq, chirp=0, decimate=1, unwrap_phase=False)
             self.display.update_fft1d(self.fft_results_1D, sample)
@@ -465,6 +482,16 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         """
         #print(f"显示当前帧数据：{frame_data}")
         #print(f"帧数据形状：{frame_data.shape}")
+
+        if self.radioButton_t0r0.isChecked():
+            self.channelstr = "tx0rx0"
+        elif self.radioButton_t0r1.isChecked():
+            self.channelstr = "tx0rx1"
+        elif self.radioButton_t1r0.isChecked():
+            self.channelstr = "tx1rx0"
+        elif self.radioButton_t1r1.isChecked():
+            self.channelstr = "tx1rx1"
+
         self.bus.log.emit(f"{self.frame_data_list[self.current_index]} 数据已加载")
         selected_label = self.comboBox_MatFrom.currentText()
         if selected_label == "CPP":  # C++ 数据
@@ -504,6 +531,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             calibrated_iq = iq
 
         self.display.update_adc4(calibrated_iq, chirp, sample)
+        self.display.update_waterfall(calibrated_iq, chirp, sample, self.channelstr)
         self.display.update_constellations(calibrated_iq, remove_dc=True, max_points=3000, show_fit=True)
         self.display.update_amp_phase(calibrated_iq, chirp=0, decimate=1, unwrap_phase=False)
         self.display.update_fft1d(self.fft_results_1D, sample)
