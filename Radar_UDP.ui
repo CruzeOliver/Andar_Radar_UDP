@@ -24,6 +24,13 @@
     <enum>Qt::LeftToRight</enum>
    </property>
    <layout class="QGridLayout" name="gridLayout">
+    <item row="3" column="1">
+     <widget class="Line" name="line_3">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+     </widget>
+    </item>
     <item row="3" column="0">
      <widget class="QTabWidget" name="tabWidget_Message">
       <property name="sizePolicy">
@@ -62,13 +69,6 @@
         </item>
        </layout>
       </widget>
-     </widget>
-    </item>
-    <item row="1" column="0">
-     <widget class="Line" name="line">
-      <property name="orientation">
-       <enum>Qt::Horizontal</enum>
-      </property>
      </widget>
     </item>
     <item row="0" column="2">
@@ -414,13 +414,13 @@
        <item>
         <widget class="QGroupBox" name="groupBox_Display">
          <property name="title">
-          <string>Diaplay</string>
+          <string>Waterfall Channel</string>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_4">
           <item>
            <layout class="QHBoxLayout" name="horizontalLayout_6">
             <item>
-             <spacer name="horizontalSpacer_5">
+             <spacer name="horizontalSpacer_3">
               <property name="orientation">
                <enum>Qt::Horizontal</enum>
               </property>
@@ -433,20 +433,21 @@
              </spacer>
             </item>
             <item>
-             <widget class="QCheckBox" name="checkBox_APcoherence">
-              <property name="layoutDirection">
-               <enum>Qt::RightToLeft</enum>
-              </property>
+             <widget class="QRadioButton" name="radioButton_t0r0">
               <property name="text">
-               <string>Amp/PhaseCoherence</string>
-              </property>
-              <property name="checked">
-               <bool>true</bool>
+               <string>Tx0Rx0</string>
               </property>
              </widget>
             </item>
             <item>
-             <spacer name="horizontalSpacer_6">
+             <widget class="QRadioButton" name="radioButton_t0r1">
+              <property name="text">
+               <string>Tx0Rx1</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="horizontalSpacer_4">
               <property name="orientation">
                <enum>Qt::Horizontal</enum>
               </property>
@@ -461,9 +462,9 @@
            </layout>
           </item>
           <item>
-           <layout class="QGridLayout" name="gridLayout_5">
-            <item row="0" column="4">
-             <spacer name="horizontalSpacer_4">
+           <layout class="QHBoxLayout" name="horizontalLayout_12">
+            <item>
+             <spacer name="horizontalSpacer_5">
               <property name="orientation">
                <enum>Qt::Horizontal</enum>
               </property>
@@ -475,34 +476,22 @@
               </property>
              </spacer>
             </item>
-            <item row="0" column="2">
-             <widget class="QCheckBox" name="checkBox_2dfft">
-              <property name="layoutDirection">
-               <enum>Qt::RightToLeft</enum>
-              </property>
+            <item>
+             <widget class="QRadioButton" name="radioButton_t1r0">
               <property name="text">
-               <string>2DFFT</string>
-              </property>
-              <property name="checked">
-               <bool>true</bool>
+               <string>Tx1Rx0</string>
               </property>
              </widget>
             </item>
-            <item row="0" column="1">
-             <widget class="QCheckBox" name="checkBox_1dfft">
-              <property name="layoutDirection">
-               <enum>Qt::RightToLeft</enum>
-              </property>
+            <item>
+             <widget class="QRadioButton" name="radioButton_t1r1">
               <property name="text">
-               <string>1DFFT</string>
-              </property>
-              <property name="checked">
-               <bool>true</bool>
+               <string>Tx1Rx1</string>
               </property>
              </widget>
             </item>
-            <item row="0" column="0">
-             <spacer name="horizontalSpacer_3">
+            <item>
+             <spacer name="horizontalSpacer_6">
               <property name="orientation">
                <enum>Qt::Horizontal</enum>
               </property>
@@ -592,17 +581,17 @@
       </layout>
      </widget>
     </item>
-    <item row="3" column="1">
-     <widget class="Line" name="line_3">
+    <item row="0" column="1">
+     <widget class="Line" name="line_4">
       <property name="orientation">
        <enum>Qt::Vertical</enum>
       </property>
      </widget>
     </item>
-    <item row="0" column="1">
-     <widget class="Line" name="line_4">
+    <item row="1" column="0">
+     <widget class="Line" name="line">
       <property name="orientation">
-       <enum>Qt::Vertical</enum>
+       <enum>Qt::Horizontal</enum>
       </property>
      </widget>
     </item>

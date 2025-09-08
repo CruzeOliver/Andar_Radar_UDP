@@ -232,13 +232,10 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         # 判断是否满足显示间隔
         if current_time - self.last_display_time > self.display_interval:
             self.display.update_adc4(iq, chirp, sample)
-            if self.checkBox_APcoherence.isChecked():
-                self.display.update_constellations(iq, remove_dc=True, max_points=3000, show_fit=True)
-                self.display.update_amp_phase(iq, chirp=0, decimate=1, unwrap_phase=False)
-            if self.checkBox_1dfft.isChecked():
-                self.display.update_fft1d(self.fft_results_1D, sample)
-            if self.checkBox_2dfft.isChecked():
-                self.display.update_fft2d(self.fft_results_2D, sample, chirp)
+            self.display.update_constellations(iq, remove_dc=True, max_points=3000, show_fit=True)
+            self.display.update_amp_phase(iq, chirp=0, decimate=1, unwrap_phase=False)
+            self.display.update_fft1d(self.fft_results_1D, sample)
+            self.display.update_fft2d(self.fft_results_2D, sample, chirp)
             self.last_display_time = current_time
         else:
             pass
@@ -509,11 +506,8 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.display.update_adc4(calibrated_iq, chirp, sample)
         self.display.update_constellations(calibrated_iq, remove_dc=True, max_points=3000, show_fit=True)
         self.display.update_amp_phase(calibrated_iq, chirp=0, decimate=1, unwrap_phase=False)
-
-        if self.checkBox_1dfft.isChecked():
-            self.display.update_fft1d(self.fft_results_1D, sample)
-        if self.checkBox_2dfft.isChecked():
-            self.display.update_fft2d(self.fft_results_2D, sample, chirp)
+        self.display.update_fft1d(self.fft_results_1D, sample)
+        self.display.update_fft2d(self.fft_results_2D, sample, chirp)
 
         R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[0], chirp, sample)
         az, el, idx, info = estimate_az_el_from_fft2d(self.fft_results_2D)
