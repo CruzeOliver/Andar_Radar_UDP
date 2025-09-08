@@ -326,6 +326,14 @@ class Ui_MainWindow(object):
         self.widget_tx0rx0.setObjectName("widget_tx0rx0")
         self.gridLayout_2.addWidget(self.widget_tx0rx0, 0, 0, 1, 1)
         self.tabWidget_Display.addTab(self.tab_ADC, "")
+        self.tab = QtWidgets.QWidget()
+        self.tab.setObjectName("tab")
+        self.horizontalLayout_8 = QtWidgets.QHBoxLayout(self.tab)
+        self.horizontalLayout_8.setObjectName("horizontalLayout_8")
+        self.widget_Waterfall = QtWidgets.QWidget(self.tab)
+        self.widget_Waterfall.setObjectName("widget_Waterfall")
+        self.horizontalLayout_8.addWidget(self.widget_Waterfall)
+        self.tabWidget_Display.addTab(self.tab, "")
         self.tab_ConstellationDiagram = QtWidgets.QWidget()
         self.tab_ConstellationDiagram.setObjectName("tab_ConstellationDiagram")
         self.gridLayout_6 = QtWidgets.QGridLayout(self.tab_ConstellationDiagram)
@@ -433,7 +441,7 @@ class Ui_MainWindow(object):
 
         self.retranslateUi(MainWindow)
         self.tabWidget_Message.setCurrentIndex(0)
-        self.tabWidget_Display.setCurrentIndex(0)
+        self.tabWidget_Display.setCurrentIndex(1)
         self.pushButton_Connect.clicked.connect(MainWindow.UDP_connect) # type: ignore
         self.pushButton_Disconnect.clicked.connect(MainWindow.UDP_disconnect) # type: ignore
         self.pushButton_ReadFile.clicked.connect(MainWindow.ReadFile) # type: ignore
@@ -469,6 +477,7 @@ class Ui_MainWindow(object):
         self.pushButton_CloseFile.setText(_translate("MainWindow", "CloseFile/Init"))
         self.pushButton.setText(_translate("MainWindow", "Save Table"))
         self.tabWidget_Display.setTabText(self.tabWidget_Display.indexOf(self.tab_ADC), _translate("MainWindow", "ADC-T2R2"))
+        self.tabWidget_Display.setTabText(self.tabWidget_Display.indexOf(self.tab), _translate("MainWindow", "Signal Waterfall"))
         self.tabWidget_Display.setTabText(self.tabWidget_Display.indexOf(self.tab_ConstellationDiagram), _translate("MainWindow", "ConstellationDiagram"))
         self.tabWidget_Display.setTabText(self.tabWidget_Display.indexOf(self.tab__AmpPhase), _translate("MainWindow", "Amp/Phase"))
         self.tabWidget_Display.setTabText(self.tabWidget_Display.indexOf(self.tab_1DFFT), _translate("MainWindow", "1D_FFT_T2R2"))
