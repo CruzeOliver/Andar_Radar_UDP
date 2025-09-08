@@ -484,6 +484,9 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         else:
             my_window = None
         iq = reorder_frame(frame_data_flat, int(chirp), int(sample),window=my_window)
+        #距离计算函数，CZT采用时域变换
+        #R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod,diag = calculate_distance_from_iq(iq,r_bins=1,M=64,use_window=None,coherent=False)
+
         self.fft_results_1D = Perform1D_FFT(iq)
         self.fft_results_2D  = Perform2D_FFT(self.fft_results_1D)
         if self.checkBox_CalibrationMode.isChecked():

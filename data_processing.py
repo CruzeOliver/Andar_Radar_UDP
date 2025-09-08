@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.io
 from datetime import datetime
-from scipy.signal import czt
+from scipy.signal import czt, get_window
 
 #============ 雷达参数配置 =================
 
@@ -283,7 +283,7 @@ def calculate_distance_from_fft(fft_result_in, n_chirp, n_points):
     B = 1.0 * fs / n_points
     f_start = f_macleod - B / 2
     f_end = f_macleod + B / 2
-    f_step_czt = (f_end - f_start) / (M - 1)
+    f_step_czt = (f_end - f_start) / (M-1)
     w = np.exp(-1j * 2 * np.pi * f_step_czt / fs)
     a = np.exp(1j * 2 * np.pi * f_start / fs)
     X_czt = czt(fft_result, M, w, a)
@@ -327,10 +327,140 @@ def calculate_distance_from_fft(fft_result_in, n_chirp, n_points):
     R_czt_macleod = (C * f_czt_macleod * CHIRP_T0 * 1e-6) / (2.0 * FM * 1e6)
 
     # 输出结果
-    print(f"FFT Distance: {R_fft:.4f} m | Macleod: {R_macleod:.4f} m | \
-            CZT@peak: {R_czt_fftpeak:.4f} m | CZT@Macleod: {R_czt_macleod:.4f} m")
+    # print(f"FFT Distance: {R_fft:.4f} m | Macleod: {R_macleod:.4f} m | \
+    #         CZT@peak: {R_czt_fftpeak:.4f} m | CZT@Macleod: {R_czt_macleod:.4f} m")
 
     return R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod
+
+
+#=========距离计算函数，直接利用时域iq数据进行变换=============
+
+# ---- 工具函数 ----
+def _parabolic_delta(m1, m0, p1, eps=1e-18):
+    denom = (m1 - 2.0*m0 + p1)
+    if np.abs(denom) < eps:
+        denom = np.sign(denom) * eps if denom != 0 else eps
+    return 0.5 * (m1 - p1) / denom
+
+def _build_czt_aw(f_start, B, M, fs):
+    # 保证扫描区间落在 [0, fs/2]
+    f_start = float(max(0.0, min(f_start, fs/2 - B)))
+    df = B / (M - 1)
+    W = np.exp(-1j * 2 * np.pi * (df / fs))
+    A = np.exp( 1j * 2 * np.pi * (f_start / fs))
+    return A, W, df, f_start
+
+def _coarse_peak_fft(x_td, fs):
+    N = x_td.shape[-1]
+    X = np.fft.fft(x_td, n=N)
+    X_pos = X[: N//2 + 1]
+    mag2 = np.abs(X_pos)**2
+    kmax = int(np.argmax(mag2))
+    if 0 < kmax < (mag2.size - 1):
+        delta = _parabolic_delta(mag2[kmax-1], mag2[kmax], mag2[kmax+1])
+    else:
+        delta = 0.0
+    f_bin = fs / N
+    f_fft_peak = kmax * f_bin
+    f_macleod  = (kmax + delta) * f_bin
+    return kmax, f_fft_peak, f_macleod
+
+
+# ---- 主函数：仅使用虚拟天线0(TX0RX0) ----
+def calculate_distance_from_iq(
+    iq,               # ndarray, 形状 (n_ant, n_chirp, n_sample)，来自 reorder_frame
+    r_bins=3.0,       # CZT 覆盖的原始 FFT bin 个数（2~4 常用）
+    M=128,            # CZT 点数（SNR 低可用 256）
+    use_window='hamming',# 时域窗名(None/'hann'/'hamming'等)
+    coherent=True     # True=沿chirp做复数相干平均；False=挑峰值最强的一条chirp
+):
+    """
+    返回: (R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod), diag
+    只在虚拟天线0（TX0RX0）上估计距离。
+    依赖的全局常量: C, ADC_SAMPLE_RATE, FM, CHIRP_T0
+    """
+    # ---- 取 TX0RX0 ----
+    x = iq[0]  # (n_chirp, n_sample)
+    n_chirp, n_sample = x.shape
+
+    # ---- 时域聚合 & 加窗 ----
+    if coherent:
+        x_td = x.mean(axis=0).astype(np.complex128, copy=False)  # 复数相干
+    else:
+        # 非相干简化策略：挑“峰值能量最大”的一条chirp
+        Xc = np.fft.fft(x, axis=-1)
+        idx = np.argmax(np.max(np.abs(Xc)**2, axis=-1))
+        x_td = x[idx].astype(np.complex128, copy=False)
+
+    if use_window is not None:
+        win = get_window(use_window, n_sample, fftbins=True).astype(np.float64)
+        # 等效噪声功率归一，避免SNR统计偏置
+        win = win / np.sqrt((win**2).mean())
+        x_td = x_td * win
+
+    # ---- 粗定位 + Macleod 细化（在 FFT 上抛物线插值） ----
+    fs = float(ADC_SAMPLE_RATE) * 1e6  # Hz
+    kmax, f_fft_peak, f_macleod = _coarse_peak_fft(x_td, fs)
+
+    # ---- 构造CZT参数（以 FFT/Macleod 两个中心各扫一次）----
+    B = float(r_bins) * fs / n_sample  # 覆盖 r_bins 个原始 FFT bin
+    # 以 FFT 峰为中心
+    f_start1 = f_fft_peak - B/2
+    A1, W1, df1, f_start1 = _build_czt_aw(f_start1, B, M, fs)
+    Xc1 = czt(x_td, M, W1, A1)
+    pk1 = int(np.argmax(np.abs(Xc1)))
+    if 0 < pk1 < (M - 1):
+        m1 = np.abs(Xc1[pk1-1])**2; m0 = np.abs(Xc1[pk1])**2; p1 = np.abs(Xc1[pk1+1])**2
+        delta1 = _parabolic_delta(m1, m0, p1)
+    else:
+        delta1 = 0.0
+    f_czt_fftpeak = f_start1 + (pk1 + delta1) * df1
+
+    # 以 Macleod 细化频率为中心
+    f_start2 = f_macleod - B/2
+    A2, W2, df2, f_start2 = _build_czt_aw(f_start2, B, M, fs)
+    Xc2 = czt(x_td, M, W2, A2)
+    pk2 = int(np.argmax(np.abs(Xc2)))
+    if 0 < pk2 < (M - 1):
+        m1 = np.abs(Xc2[pk2-1])**2; m0 = np.abs(Xc2[pk2])**2; p1 = np.abs(Xc2[pk2+1])**2
+        delta2 = _parabolic_delta(m1, m0, p1)
+    else:
+        delta2 = 0.0
+    f_czt_macleod = f_start2 + (pk2 + delta2) * df2
+
+    # ---- 频率 -> 距离（与旧实现保持一致的公式）----
+    # R = C * f_b * T_chirp / (2 * B_chirp)
+    # 其中 f_b(Hz), T_chirp=CHIRP_T0*1e-6 (s), B_chirp=FM*1e6 (Hz)
+    T_chirp = float(CHIRP_T0) * 1e-6
+    B_chirp = float(FM) * 1e6
+    def fb2R(fb):
+        return C * fb * T_chirp / (2.0 * B_chirp)
+
+    R_fft         = fb2R(f_fft_peak)
+    R_macleod     = fb2R(f_macleod)
+    R_czt_fftpeak = fb2R(f_czt_fftpeak)
+    R_czt_macleod = fb2R(f_czt_macleod)
+
+    diag = {
+        "antenna_used": 0,
+        "n_chirp": int(n_chirp),
+        "n_sample": int(n_sample),
+        "fs_Hz": float(fs),
+        "B_czt_Hz": float(B),
+        "M": int(M),
+        "r_bins": float(r_bins),
+        "coherent": bool(coherent),
+        "window": use_window if use_window is not None else "none",
+        "kmax": int(kmax),
+        "f_fft_peak_Hz": float(f_fft_peak),
+        "f_macleod_Hz": float(f_macleod),
+        "f_czt_fftpeak_Hz": float(f_czt_fftpeak),
+        "f_czt_macleod_Hz": float(f_czt_macleod),
+        "df_czt_fftpeak_Hz": float(df1),
+        "df_czt_macleod_Hz": float(df2),
+    }
+    return R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod, diag
+
 
 def estimate_az_el_from_fft2d(fft2d_results):
     """
