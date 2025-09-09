@@ -509,7 +509,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             my_window = None
         iq = reorder_frame(frame_data_flat, int(chirp), int(sample),window=my_window)
         #距离计算函数，CZT采用时域变换
-        #R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod,diag = calculate_distance_from_iq(iq,r_bins=1,M=64,use_window=None,coherent=False)
+        R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod,diag = calculate_distance_from_iq(iq,r_bins=3,M=32,use_window=None,coherent=True)
 
         self.fft_results_1D = Perform1D_FFT(iq)
         self.fft_results_2D  = Perform2D_FFT(self.fft_results_1D)
@@ -537,7 +537,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.display.update_fft1d(self.fft_results_1D, sample)
         self.display.update_fft2d(self.fft_results_2D, sample, chirp)
 
-        R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[0], chirp, sample)
+        #R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[0], chirp, sample)
         az, el, idx, info = estimate_az_el_from_fft2d(self.fft_results_2D)
         self.display.update_point_cloud_polar("PointCloud", R_macleod, 90.0-az, size=10.0, color='g')
 
