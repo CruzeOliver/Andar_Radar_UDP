@@ -3,10 +3,12 @@ from PyQt5.QtWidgets import QVBoxLayout, QWidget, QGraphicsPathItem
 from PyQt5.QtCore import QRectF,Qt
 import pyqtgraph as pg
 from pyqtgraph import ImageView
+from pyqtgraph.opengl import GLViewWidget, GLMeshItem, GLAxisItem
+import pyqtgraph.opengl as gl
 import numpy as np
-from PyQt5.QtGui import QPainterPath, QPen, QColor, QTransform
+from PyQt5.QtGui import QPainterPath, QPen, QColor, QTransform, QFont
 from collections import deque
-
+from pyqtgraph.opengl.items.GLAxisItem import GLAxisItem
 class PgDisplay:
     """
     负责：
@@ -313,178 +315,6 @@ class PgDisplay:
                 h['major_axis'].setData([], [])
                 h['minor_axis'].setData([], [])
                 h['metrics_text'].setText("")
-
-    def update_amp_phase2(self,
-                     iq: np.ndarray,
-                     *,
-                     chirp: int = 0,
-                     sample: int | None = None,
-                     key_map: dict | None = None,
-                     unwrap_phase: bool = True,
-                     decimate: int = 1,
-                     remove_dc: bool = False,
-                     autorange: bool = True):
-        """
-        iq : np.ndarray
-            复数 IQ 数据，形状 (4, n_chirp, n_sample)
-        chirp : int
-            选择第几个 chirp 来画时序（默认第 0 个）
-        sample : int | None
-            仅取前 sample 个样点；为 None 则取整条 chirp
-        key_map : dict | None
-            占位键名 -> 天线索引 的映射。默认按当前工程：
-            {'APtx0rx0':0, 'APtx0rx1':1, 'APtx1rx0':2, 'APtx1rx1':3}
-        unwrap_phase : bool
-            是否对相位做 np.unwrap ，如果np.unwrap = true 相位会呈现一条直线，else相位会在 -π 到 π 之间跳变
-        decimate : int
-            下采样因子（>=1）。例如 4 表示每 4 点取 1 点
-        remove_dc : bool
-            是否对 z(t) 去直流（z -= mean(z)）。用于相位更稳的场景
-        autorange : bool
-            是否自动设置坐标范围
-        批量更新四路“幅度/相位时序”图，并相对 0 通道显示对比：
-            - 灰色虚线：0 通道的 |z| 与 phase（同一 chirp/窗口）
-            - 文本指标：ΔAmp(dB) 与 ΔPhase(°)（采用RMSE）
-        """
-        assert iq.ndim == 3 and iq.shape[0] == 4, "iq 形状必须是 (4, n_chirp, n_sample)"
-        n_chirp, n_sample = iq.shape[1], iq.shape[2]
-        if chirp < 0 or chirp >= n_chirp:
-            return
-
-        if key_map is None:
-            key_map = {
-                'APtx0rx0': 0,
-                'APtx0rx1': 1,
-                'APtx1rx0': 2,
-                'APtx1rx1': 3,
-            }
-
-        # 统一抽样窗口
-        end = n_sample if sample is None else min(sample, n_sample)
-        sl = slice(0, end, max(1, decimate))
-
-        # ---------- 准备参考通道（idx=0） ----------
-        ref_idx = 0
-        z_ref = iq[ref_idx, chirp, :end]
-        if remove_dc:
-            mref = np.nanmean(z_ref)
-            if np.isfinite(mref):
-                z_ref = z_ref - mref
-        z_ref = np.nan_to_num(z_ref[sl], nan=0.0, posinf=0.0, neginf=0.0)
-
-        amp_ref = np.abs(z_ref).astype(np.float32)
-        ph_ref  = np.angle(z_ref).astype(np.float32)
-        if unwrap_phase:
-            ph_ref = np.unwrap(ph_ref)
-
-        t_ref = np.arange(z_ref.size, dtype=np.int32)
-        eps = 1e-12  # 防除零
-
-        # ---------- 遍历每个通道 ----------
-        for key, ant_idx in key_map.items():
-            h = self.pg_amp_phase_dict.get(key)
-            if not h:
-                continue
-
-            # 取该通道数据
-            z = iq[ant_idx, chirp, :end]
-            if z.size == 0:
-                h['amp'].setData([], [])
-                h['phase'].setData([], [])
-                h['amp_ref'].setData([], [])
-                h['phase_ref'].setData([], [])
-                if 'metrics_text' in h:
-                    h['metrics_text'].setText("")
-                continue
-
-            if remove_dc:
-                m = np.nanmean(z)
-                if np.isfinite(m):
-                    z = z - m
-
-            z = np.nan_to_num(z[sl], nan=0.0, posinf=0.0, neginf=0.0)
-            amp = np.abs(z).astype(np.float32)
-            ph  = np.angle(z).astype(np.float32)
-            if unwrap_phase:
-                ph = np.unwrap(ph)
-
-            t = np.arange(z.size, dtype=np.int32)
-
-            # --- 更新曲线（本通道） ---
-            h['amp'].setData(t, amp)
-            h['phase'].setData(t, ph)
-
-            # --- 画参考通道（同一窗口）的虚线 ---
-            h['amp_ref'].setData(t_ref, amp_ref)
-            h['phase_ref'].setData(t_ref, ph_ref)
-
-            # --- 计算与参考通道的差值：ΔAmp(dB) 与 ΔPhase(°) ---
-            # 注意：必须长度一致才好做逐点差，这里对齐到 min_len
-            min_len = min(amp.size, amp_ref.size)
-            if min_len >= 8:
-                a = amp[:min_len]; ar = amp_ref[:min_len]
-                p = ph[:min_len];  pr = ph_ref[:min_len]
-
-                # ΔAmp（dB）：20*log10(|z|/|z_ref|)
-                delta_amp_db = 20.0 * np.log10((a + eps) / (ar + eps))
-                # 将中位数替换为RMSE
-                # delta_amp_db_med = float(np.nanmedian(delta_amp_db))
-                delta_amp_db_rmse = np.sqrt(np.nanmean(np.square(delta_amp_db)))
-
-                # ΔPhase（度）：(phase - phase_ref)
-                delta_phase = p - pr
-                if not unwrap_phase:
-                    # 若未展开，则把相位差规整到 [-pi, pi]
-                    delta_phase = (delta_phase + np.pi) % (2*np.pi) - np.pi
-
-                # 展示更直观：把角度规整到 [-45°, +45°]
-                delta_phase_deg = np.degrees(delta_phase)
-                delta_phase_deg = np.where(delta_phase_deg > 45, delta_phase_deg - 90, delta_phase_deg)
-                delta_phase_deg = np.where(delta_phase_deg < -45, delta_phase_deg + 90, delta_phase_deg)
-                # 将中位数替换为RMSE
-                # delta_phase_deg_med = float(np.nanmedian(delta_phase_deg))
-                delta_phase_deg_rmse = np.sqrt(np.nanmean(np.square(delta_phase_deg)))
-
-                # 文本显示（参考通道自身标记为 REF）
-                if ant_idx == ref_idx:
-                    text = "REF (Ch0)"
-                else:
-                    text = f"ΔAmp(RMSE) ≈ {delta_amp_db_rmse:.2f} dB\nΔPhase(RMSE) ≈ {delta_phase_deg_rmse:.1f}°"
-
-                # 放到 Amp 图右下角
-                try:
-                    vb = h['pw_amp'].getViewBox()
-                    (x0, x1), (y0, y1) = vb.state['viewRange'][0], vb.state['viewRange'][1]
-                    tx = x1 - 0.02*(x1 - x0)  # 右侧留 2% 边距
-                    ty = y0 + 0.40*(y1 - y0)  # 底部留 40% 边距（这个边距是相对于整个plot的高度，但是plot里有上下两个子图）
-                    h['metrics_text'].setPos(tx, ty)
-                except Exception:
-                    h['metrics_text'].setPos(t[0] if t.size else 0, (np.nanmax(amp) if amp.size else 1.0))
-                h['metrics_text'].setText(text)
-            else:
-                if 'metrics_text' in h:
-                    h['metrics_text'].setText("")
-
-            # --- 自动范围 ---
-            if autorange:
-                # Amp
-                amax = float(np.nanmax(amp)) if amp.size else 1.0
-                amax = 1.0 if (not np.isfinite(amax) or amax < 1e-6) else amax
-                xmax = max(t[-1] if t.size else 1, t_ref[-1] if t_ref.size else 1)
-                h['pw_amp'].setXRange(0, max(1, xmax), padding=0.02)
-                h['pw_amp'].setYRange(0, amax * 1.05, padding=0.02)
-
-                # Phase
-                if ph.size and ph_ref.size:
-                    pmin = float(np.nanmin([np.nanmin(ph),    np.nanmin(ph_ref)]))
-                    pmax = float(np.nanmax([np.nanmax(ph),    np.nanmax(ph_ref)]))
-                    if not np.isfinite(pmin) or not np.isfinite(pmax) or pmax - pmin < 1e-6:
-                        pmin, pmax = -np.pi, np.pi
-                else:
-                    pmin, pmax = -np.pi, np.pi
-                pad = 0.05 * (pmax - pmin)
-                h['pw_phase'].setXRange(0, max(1, xmax), padding=0.02)
-                h['pw_phase'].setYRange(pmin - pad, pmax + pad, padding=0.02)
 
     def update_amp_phase(self,
                      iq: np.ndarray,
@@ -1110,3 +940,155 @@ class PgDisplay:
             # 重置坐标范围
             h['pw_amp'].setRange(xRange=(0, 1), yRange=(0, 1), padding=0.02)
             h['pw_phase'].setRange(xRange=(0, 1), yRange=(-np.pi, np.pi), padding=0.02)
+
+
+
+#============================ Stable 3D Waterfall ====================
+    #显示效果不佳，暂时弃用
+    '''
+    def init_3d_waterfall(self, waterfall_placeholders: Dict[str, QWidget]):
+        """
+        初始化3D瀑布图（稳定版）：
+        1. 完全移除GLColorMap和setHeightMask依赖
+        2. 用自定义颜色数组实现幅值着色
+        3. 确保Z轴数据形状严格匹配(len(x), len(y))
+
+        参数:
+        - waterfall_placeholders: 瀑布图占位符字典（key=标识，value=QWidget）
+        """
+        for key, placeholder in waterfall_placeholders.items():
+            glview = gl.GLViewWidget()
+            layout = QVBoxLayout(placeholder)
+            layout.addWidget(glview)
+            layout.setContentsMargins(0, 0, 0, 0)  # 清除边距避免视图裁剪
+
+            # 1. 创建X-Y网格（对应sample-chirp平面，z=0基准面）
+            grid = gl.GLGridItem(
+                size=pg.Vector(256, 32, 1),  # 网格大小：x=256(sample)，y=32(chirp)
+                color=(0.8, 0.8, 0.8, 0.5)   # 浅灰色半透明网格（不影响数据查看）
+            )
+            grid.setSpacing(x=32, y=4, z=1)  # 网格间距：x每32个sample，y每4个chirp
+            grid.translate(0, 0, 0)
+            glview.addItem(grid)
+
+            # 2. 创建3D坐标轴（x=sample，y=chirp，z=幅值）
+            axis = gl.GLAxisItem()
+            init_max_mag = self.get_max_magnitude()
+            axis.setSize(x=256, y=32, z=init_max_mag * 0.8)  # 轴长匹配数据范围
+            axis.translate(-10, -2, 0)  # 偏移避免与数据重叠
+            glview.addItem(axis)
+
+            # 3. 初始化表面图（核心：用color数组实现着色，无版本依赖）
+            # 初始Z数据：(256,32) = (len(x), len(y))，确保形状匹配
+            init_z = np.zeros((256, 32))
+            # 初始颜色数组：与Z数据同形状，默认蓝色（低幅值）
+            init_color = np.full((256, 32, 4), (0.0, 0.0, 1.0, 1.0), dtype=np.float32)
+
+            surface_plot = gl.GLSurfacePlotItem(
+                x=np.arange(256),          # x轴：sample索引(0-255)
+                y=np.arange(32),           # y轴：chirp索引(0-31)
+                z=init_z,                  # Z轴：初始幅值（全0）
+                colors=init_color,         # 颜色数组（与Z同形状，(H,W,4)）
+                computeNormals=False       # 关闭法向量计算，提升性能（无视觉影响）
+            )
+            glview.addItem(surface_plot)
+
+            # 存储视图对象（包含初始幅值范围，用于后续颜色计算）
+            self.pg_waterfall_dict[key] = {
+                'glview': glview,
+                'surface': surface_plot,
+                'axis': axis,
+                'init_max_mag': init_max_mag  # 初始最大幅值（用于颜色归一化）
+            }
+
+            # 设置默认视角（确保能同时看到x/y/z轴，避免视角遮挡）
+            glview.setCameraPosition(
+                distance=500,    # 视角距离：确保完整显示数据
+                elevation=30,    # 仰角30°：看到x-y平面和z轴高度
+                azimuth=-45,     # 方位角-45°：同时看到x轴（右）和y轴（前）
+                pos=pg.Vector(128, 16, 0)  # 视角中心：数据中心点（避免偏移）
+            )
+
+    def update_3d_waterfall(self, iq: np.ndarray, channelstr: str):
+        """
+        更新3D瀑布图数据（稳定版）：
+        1. 计算幅值并转置，确保Z轴形状正确
+        2. 用自定义函数生成颜色数组（低幅值→蓝，高幅值→红）
+        3. 动态调整坐标轴z轴长度，适配当前幅值范围
+
+        参数：
+        - iq: np.ndarray, 形状(4, 32, 256)（通道, chirp, sample）
+        - channelstr: str, 天线通道（'tx0rx0'/'tx0rx1'/'tx1rx0'/'tx1rx1'）
+        """
+        # 1. 通道映射验证
+        channel_map = {'tx0rx0': 0, 'tx0rx1': 1, 'tx1rx0': 2, 'tx1rx1': 3}
+        if channelstr not in channel_map:
+            raise ValueError(f"无效通道：{channelstr}，可选通道：{list(channel_map.keys())}")
+
+        # 2. 检查瀑布图是否初始化
+        waterfall_obj = self.pg_waterfall_dict.get('Waterfall')
+        if not waterfall_obj:
+            raise RuntimeError("请先调用init_3d_waterfall初始化3D瀑布图")
+
+        # 3. 验证IQ数据维度（必须为(4,32,256)）
+        if iq.shape != (4, 32, 256):
+            raise ValueError(f"IQ数据维度错误：期望(4,32,256)，实际{iq.shape}")
+
+        # 4. 提取指定通道数据并计算幅值
+        channel_idx = channel_map[channelstr]
+        iq_data = iq[channel_idx, :, :]  # 原始形状：(32,256) = (chirp, sample)
+        magnitude_data = np.abs(iq_data) + 1e-6  # 计算幅值，加1e-6避免0值异常
+
+        # 5. 转置幅值数据：确保Z轴形状=(256,32) = (len(x), len(y))
+        z_data = magnitude_data.T  # 转置后形状：(256,32)，完全匹配GLSurfacePlotItem要求
+
+        # 6. 生成颜色数组（核心：无版本依赖，手动映射幅值到颜色）
+        # 步骤1：归一化幅值到0-1范围（让颜色过渡均匀）
+        current_min_mag = np.min(z_data)
+        current_max_mag = np.max(z_data)
+        # 处理极端情况（所有幅值相同），避免除零错误
+        if current_max_mag - current_min_mag < 1e-8:
+            norm_mag = np.zeros_like(z_data)
+        else:
+            norm_mag = (z_data - current_min_mag) / (current_max_mag - current_min_mag)
+
+        # 步骤2：颜色映射（低幅值→蓝(0,0,1)，中幅值→紫(0.5,0,0.5)，高幅值→红(1,0,0)）
+        # 红色通道：随幅值增大从0→1
+        red = norm_mag
+        # 蓝色通道：随幅值增大从1→0
+        blue = 1 - norm_mag
+        # 绿色通道：固定为0（避免颜色混杂）
+        green = np.zeros_like(norm_mag)
+        # 透明度：固定为1（不透明，确保可见）
+        alpha = np.ones_like(norm_mag)
+
+        # 合并为颜色数组（形状：(256,32,4)，与Z数据匹配）
+        color_array = np.stack([red, green, blue, alpha], axis=-1).astype(np.float32)
+
+        # 7. 更新表面图数据（Z轴+颜色数组）
+        waterfall_obj['surface'].setData(
+            x=np.arange(256),  # 保持x轴不变（sample索引）
+            y=np.arange(32),   # 保持y轴不变（chirp索引）
+            z=z_data,          # 更新Z轴幅值数据
+            colors=color_array # 更新颜色数组（与幅值同步）
+        )
+
+        # 8. 动态调整z轴长度（适配当前幅值范围，避免轴过长/过短）
+        z_axis_length = (current_max_mag - current_min_mag) * 0.8  # 取幅值范围的80%
+        waterfall_obj['axis'].setSize(
+            x=256,  # x轴长度固定（256个sample）
+            y=32,   # y轴长度固定（32个chirp）
+            z=z_axis_length if z_axis_length > 1e-8 else waterfall_obj['init_max_mag'] * 0.8
+        )
+        # 调整z轴起点到当前最小幅值（避免轴悬空）
+        waterfall_obj['axis'].translate(-10, -2, current_min_mag)
+
+    def get_max_magnitude(self):
+        """
+        辅助函数：返回IQ数据的最大幅值估计（必须根据实际数据校准！）
+        方法：运行一次程序后，查看update中的current_max_mag打印值，填入此处
+        """
+        # 示例：若实际最大幅值为5.2，则改为return 5.2
+        # 初始可先设为1.0，后续根据实际数据调整
+        return 1.0
+        '''

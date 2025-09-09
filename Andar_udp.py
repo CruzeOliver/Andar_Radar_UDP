@@ -245,10 +245,10 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         elif self.radioButton_t1r1.isChecked():
             self.channelstr = "tx1rx1"
         self.display.update_waterfall(iq, chirp, sample, self.channelstr)
+
         # 判断是否满足显示间隔
         if current_time - self.last_display_time > self.display_interval:
             self.display.update_adc4(iq, chirp, sample)
-
             self.display.update_constellations(iq, remove_dc=True, max_points=3000, show_fit=True)
             self.display.update_amp_phase(iq, chirp=0, decimate=1, unwrap_phase=False)
             self.display.update_fft1d(self.fft_results_1D, sample)
