@@ -25,6 +25,7 @@ class PgDisplay:
                  constellation_placeholders: Dict[str, QWidget],
                  amp_phase_placeholders: Dict[str, QWidget],
                  waterfall_placeholders: Dict[str, QWidget],
+                 frequency_placeholders: Dict[str, QWidget],
                  *,
                  r_max: float = 6.0,         # 最大量程 (距离)
                  fov_deg: float = 180.0,      # 扇形角度（例如120°）
@@ -46,6 +47,7 @@ class PgDisplay:
         self.pg_const_dict: Dict[str, Dict[str, Any]] = {} # Constellation Diagram 图像
         self.pg_amp_phase_dict: Dict[str, Dict[str, Any]] = {} # Amp-Phase 图像
         self.pg_waterfall_dict: Dict[str, Dict[str, Any]] = {} # Waterfall 图像
+        self.pg_frequency_dict: Dict[str, Dict[str, Any]] = {} # frequency 图像
 
         self._colormap = self._build_jet_colormap()
 
@@ -54,12 +56,20 @@ class PgDisplay:
         self._init_constellation_placeholders(constellation_placeholders)
         self._init_amp_phase(amp_phase_placeholders)
         self._init_fft1d(fft1d_placeholders)
+        self._init_frequency(frequency_placeholders)
         self._init_fft2d(fft2d_placeholders)
 
         self._r_max = float(r_max)
         self._theta_center = np.deg2rad(theta_center_deg)
         self._fov = np.deg2rad(fov_deg)
         self._init_point_cloud_semicircle(point_cloud_placeholders)
+
+        self.frequency_cache = {
+            'FFT': deque(maxlen=20),
+            'Macleod': deque(maxlen=20),
+            'CZT': deque(maxlen=20),
+            'Macleod-CZt': deque(maxlen=20),
+        }
 
 
 
@@ -532,6 +542,54 @@ class PgDisplay:
             except Exception:
                 pass
 
+    def update_frequency(self, diag: dict):
+        """
+        更新频率图表。
+
+        参数:
+            diag : dict
+                包含四种算法频率值的字典。
+                键包括: 'f_fft_peak_Hz', 'f_macleod_Hz',
+                'f_czt_only_Hz', 'f_combo_Hz'。
+            key : str
+                图表在 pg_frequency_dict 中的键名。
+        """
+        frequency_keys = ['frequency']
+        # 从字典中安全地获取数据，如果键不存在则返回 NaN
+        f_fft = diag.get('f_fft_peak_Hz')
+        f_macleod = diag.get('f_macleod_Hz')
+        f_czt = diag.get('f_czt_only_Hz')
+        f_combo = diag.get('f_combo_Hz')
+
+        # 确保图表句柄存在
+        h = self.pg_frequency_dict.get('frequency')
+        if not h:
+            return
+
+        # 获取曲线句柄
+        curve_fft = h.get('FFT')
+        curve_macleod = h.get('Macleod')
+        curve_czt = h.get('CZT')
+        curve_combo = h.get('Macleod-CZt')
+
+        # 将新数据添加到缓存
+        self.frequency_cache['FFT'].append(f_fft)
+        self.frequency_cache['Macleod'].append(f_macleod)
+        self.frequency_cache['CZT'].append(f_czt)
+        self.frequency_cache['Macleod-CZt'].append(f_combo)
+
+        # 更新绘图
+        x_data = list(range(len(self.frequency_cache['FFT'])))
+
+        if curve_fft:
+            curve_fft.setData(x_data, list(self.frequency_cache['FFT']))
+        if curve_macleod:
+            curve_macleod.setData(x_data, list(self.frequency_cache['Macleod']))
+        if curve_czt:
+            curve_czt.setData(x_data, list(self.frequency_cache['CZT']))
+        if curve_combo:
+            curve_combo.setData(x_data, list(self.frequency_cache['Macleod-CZt']))
+
     def update_fft2d(self, fft2d_results: np.ndarray, n_points: int, n_chirp: int):
         """
         fft2d_results: shape (4, n_chirp, n_points)
@@ -786,6 +844,34 @@ class PgDisplay:
 
             # 保存句柄
             self.pg_plot_dict[key] = {'pw': pw, 'MAG': curve, 'metrics_text': metrics_text}
+
+    def _init_frequency(self, placeholders: Dict[str, QWidget]):
+        """
+        为每个占位 QWidget 初始化频率图表，
+        x 轴为 count（计数），y 轴为频率，不同颜色代表不同的算法。
+        """
+        for key, container in placeholders.items():
+            layout = QVBoxLayout(container)
+
+            # 创建一个 PlotWidget 用于频率图
+            pw = pg.PlotWidget()
+            self._set_plot_style(pw)  # 设置图表样式
+            pw.addLegend(offset=(10, 10))
+            pw.setLabel('bottom', 'Count')  # x 轴为 count
+            pw.setLabel('left', 'Frequency (Hz)')  # y 轴为频率
+            pw.setTitle(f"Frequency", color='k', size='12pt')
+
+            # 将 PlotWidget 添加到容器的布局中
+            layout.addWidget(pw)
+
+            # 使用不同的颜色表示不同算法
+            curve_algo_1 = pw.plot(pen=pg.mkPen('r', width=2), name='FFT')  # 红色
+            curve_algo_2 = pw.plot(pen=pg.mkPen('b', width=2), name='Macleod')  # 蓝色
+            curve_algo_3 = pw.plot(pen=pg.mkPen('g', width=2), name='CZT')  # 绿色
+            curve_algo_4 = pw.plot(pen=pg.mkPen('m', width=2), name='Macleod-CZt')  # 品红色
+
+            # 保存句柄，方便后续更新
+            self.pg_frequency_dict[key] = {'pw': pw, 'FFT': curve_algo_1, 'Macleod': curve_algo_2,'CZT': curve_algo_3,'Macleod-CZt': curve_algo_4}
 
     def _init_fft2d(self, placeholders: Dict[str, QWidget]):
         for key, container in placeholders.items():

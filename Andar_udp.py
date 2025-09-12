@@ -125,6 +125,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         ConstellationDiagram_keys = ['CDtx0rx0', 'CDtx0rx1', 'CDtx1rx0', 'CDtx1rx1']
         amp_phase_keys = ['APtx0rx0', 'APtx0rx1', 'APtx1rx0', 'APtx1rx1']
         waterfall_keys = ['Waterfall']
+        frequency_keys = ['frequency']
 
         adc_placeholders = {k: getattr(self, f'widget_{k}') for k in adc4_keys}
         fft1d_placeholders = {k: getattr(self, f'widget_{k}') for k in fft1d_keys}
@@ -133,6 +134,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         constellation_placeholders = {k: getattr(self, f'widget_{k}') for k in ConstellationDiagram_keys}
         amp_phase_placeholders = {k: getattr(self, f'widget_{k}') for k in amp_phase_keys}
         waterfall_placeholders = {k: getattr(self, f'widget_{k}') for k in waterfall_keys}
+        frequency_placeholders = {k: getattr(self, f'widget_{k}') for k in frequency_keys}
 
         #GUI显示界面绑定实例化
         self.display = PgDisplay(
@@ -142,7 +144,8 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             point_cloud_placeholders = point_cloud_placeholders,
             constellation_placeholders = constellation_placeholders,
             amp_phase_placeholders = amp_phase_placeholders,
-            waterfall_placeholders = waterfall_placeholders
+            waterfall_placeholders = waterfall_placeholders,
+            frequency_placeholders = frequency_placeholders
         )
 
         self.bus = Bus()
@@ -225,6 +228,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.fft_results_1D = Perform1D_FFT(iq)
         self.fft_results_2D = Perform2D_FFT(self.fft_results_1D)
         R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod,diag = calculate_distance_from_iq(iq,r_bins=2,M=32,use_window=None,coherent=True)
+        self.display.update_frequency(diag)
         if self.checkBox_CalibrationMode.isChecked():
             #得到2DFFT的峰值索引 对应的zij向量
             peak_idx = np.unravel_index(np.argmax(np.abs(self.fft_results_2D[0])), self.fft_results_2D[0].shape)
@@ -512,7 +516,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         iq = reorder_frame(frame_data_flat, int(chirp), int(sample),window=my_window)
         #距离计算函数，CZT采用时域变换
         R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod,diag = calculate_distance_from_iq(iq,r_bins=2,M=32,use_window=None,coherent=True)
-
+        self.display.update_frequency(diag)
         self.fft_results_1D = Perform1D_FFT(iq)
         self.fft_results_2D  = Perform2D_FFT(self.fft_results_1D)
         if self.checkBox_CalibrationMode.isChecked():
