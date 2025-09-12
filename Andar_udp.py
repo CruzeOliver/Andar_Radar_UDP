@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from PyQt5.QtCore import QObject, pyqtSignal, QRectF, Qt
 import time
 from PyQt5 import QtCore
-from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox,  QTableWidget, QTableWidgetItem, QHeaderView
+from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox,  QTableWidget, QTableWidgetItem, QHeaderView, QStyle
 from PyQt5.QtGui import QPixmap, QIcon
 import numpy as np
 import pyqtgraph as pg
@@ -17,9 +17,10 @@ from udp_handler import *
 from display_pg import PgDisplay
 import csv
 
+
 # 加入DPI缩放，可以让GUI，在不同分辨率显示器之间跨越 ，不变形
 QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)  # 启用 DPI 缩放
-QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps)     # 启用高 DPI 图标和图像
+
 
 # ================== Qt 信号总线 ==================
 class Bus(QObject):
@@ -223,7 +224,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         iq = reorder_frame(frame, chirp, sample, window=my_window)
         self.fft_results_1D = Perform1D_FFT(iq)
         self.fft_results_2D = Perform2D_FFT(self.fft_results_1D)
-        #R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod,diag = calculate_distance_from_iq(iq,r_bins=2,M=128,use_window=None,coherent=True)
+        R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod,diag = calculate_distance_from_iq(iq,r_bins=2,M=32,use_window=None,coherent=True)
         if self.checkBox_CalibrationMode.isChecked():
             #得到2DFFT的峰值索引 对应的zij向量
             peak_idx = np.unravel_index(np.argmax(np.abs(self.fft_results_2D[0])), self.fft_results_2D[0].shape)
@@ -256,13 +257,14 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             self.last_display_time = current_time
         else:
             pass
-        R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[0], chirp, sample)
+        #R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod = calculate_distance_from_fft2(self.fft_results_1D[0], chirp, sample)
         az, el, idx, info = estimate_az_el_from_fft2d(self.fft_results_2D)
         self.display.update_point_cloud_polar("PointCloud", R_macleod, 90.0-az, size=10.0, color='g')
 
         # 更新表格显示距离、角度计算结果
-        row_data = [f"{self.current_index}",f"{az:.4f}",f"{R_fft:.4f} m",
-                    f"{R_macleod:.4f} m",f"{R_czt_fftpeak:.4f} m",f"{R_czt_macleod:.4f} m"]
+        row_data = [f"{self.current_index}",f"{az:.4f}",f"{R_fft:.4f} m / {diag['f_fft_peak_Hz']:.4f}hz",
+                    f"{R_macleod:.4f} m / {diag['f_macleod_Hz']:.4f}hz",f"{R_czt_fftpeak:.4f} m / {diag['f_czt_only_Hz']:.4f}hz",
+                    f"{R_czt_macleod:.4f} m / {diag['f_combo_Hz']:.4f}hz"]
         row_count = self.tableWidget_distance.rowCount()
         self.tableWidget_distance.insertRow(row_count)
         for i, value in enumerate(row_data):
@@ -509,7 +511,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
             my_window = None
         iq = reorder_frame(frame_data_flat, int(chirp), int(sample),window=my_window)
         #距离计算函数，CZT采用时域变换
-        R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod,diag = calculate_distance_from_iq(iq,r_bins=3,M=32,use_window=None,coherent=True)
+        R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod,diag = calculate_distance_from_iq(iq,r_bins=2,M=32,use_window=None,coherent=True)
 
         self.fft_results_1D = Perform1D_FFT(iq)
         self.fft_results_2D  = Perform2D_FFT(self.fft_results_1D)
@@ -542,8 +544,9 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.display.update_point_cloud_polar("PointCloud", R_macleod, 90.0-az, size=10.0, color='g')
 
         # 更新表格显示距离、角度计算结果
-        row_data = [f"{self.current_index}",f"{az:.4f}",f"{R_fft:.4f} m",
-                    f"{R_macleod:.4f} m",f"{R_czt_fftpeak:.4f} m",f"{R_czt_macleod:.4f} m"]
+        row_data = [f"{self.current_index}",f"{az:.4f}",f"{R_fft:.4f} m / {diag['f_fft_peak_Hz']:.4f}hz",
+                    f"{R_macleod:.4f} m / {diag['f_macleod_Hz']:.4f}hz",f"{R_czt_fftpeak:.4f} m / {diag['f_czt_only_Hz']:.4f}hz",
+                    f"{R_czt_macleod:.4f} m / {diag['f_combo_Hz']:.4f}hz"]
         row_count = self.tableWidget_distance.rowCount()
         self.tableWidget_distance.insertRow(row_count)
         for i, value in enumerate(row_data):
