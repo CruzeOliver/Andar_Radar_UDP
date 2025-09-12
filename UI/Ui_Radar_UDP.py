@@ -383,6 +383,14 @@ class Ui_MainWindow(object):
         self.widget_1DFFTtx1rx1.setObjectName("widget_1DFFTtx1rx1")
         self.gridLayout_3.addWidget(self.widget_1DFFTtx1rx1, 1, 1, 1, 1)
         self.tabWidget_Display.addTab(self.tab_1DFFT, "")
+        self.tab_2 = QtWidgets.QWidget()
+        self.tab_2.setObjectName("tab_2")
+        self.horizontalLayout_13 = QtWidgets.QHBoxLayout(self.tab_2)
+        self.horizontalLayout_13.setObjectName("horizontalLayout_13")
+        self.widget_frequency = QtWidgets.QWidget(self.tab_2)
+        self.widget_frequency.setObjectName("widget_frequency")
+        self.horizontalLayout_13.addWidget(self.widget_frequency)
+        self.tabWidget_Display.addTab(self.tab_2, "")
         self.tab_2DFFT = QtWidgets.QWidget()
         self.tab_2DFFT.setObjectName("tab_2DFFT")
         self.gridLayout_4 = QtWidgets.QGridLayout(self.tab_2DFFT)
@@ -438,7 +446,7 @@ class Ui_MainWindow(object):
 
         self.retranslateUi(MainWindow)
         self.tabWidget_Message.setCurrentIndex(0)
-        self.tabWidget_Display.setCurrentIndex(0)
+        self.tabWidget_Display.setCurrentIndex(5)
         self.pushButton_Connect.clicked.connect(MainWindow.UDP_connect) # type: ignore
         self.pushButton_Disconnect.clicked.connect(MainWindow.UDP_disconnect) # type: ignore
         self.pushButton_ReadFile.clicked.connect(MainWindow.ReadFile) # type: ignore
@@ -479,5 +487,6 @@ class Ui_MainWindow(object):
         self.tabWidget_Display.setTabText(self.tabWidget_Display.indexOf(self.tab_ConstellationDiagram), _translate("MainWindow", "ConstellationDiagram"))
         self.tabWidget_Display.setTabText(self.tabWidget_Display.indexOf(self.tab__AmpPhase), _translate("MainWindow", "Amp/Phase"))
         self.tabWidget_Display.setTabText(self.tabWidget_Display.indexOf(self.tab_1DFFT), _translate("MainWindow", "1D_FFT_T2R2"))
+        self.tabWidget_Display.setTabText(self.tabWidget_Display.indexOf(self.tab_2), _translate("MainWindow", "Frequency"))
         self.tabWidget_Display.setTabText(self.tabWidget_Display.indexOf(self.tab_2DFFT), _translate("MainWindow", "2D_FFT_T2R2"))
         self.tabWidget_Display.setTabText(self.tabWidget_Display.indexOf(self.tab_PoitCloud), _translate("MainWindow", "Point Cloud"))
