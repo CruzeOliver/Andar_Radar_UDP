@@ -144,7 +144,7 @@ Visualizes amplitude variations across chirps and samples as a color-mapped heat
 
 ### Signal Waterfall Interface
 
-![Signal Waterfall Interface](doc\image\waterfall.png)
+![Signal Waterfall Interface](doc/image/waterfall.png)
 
 ------
 
@@ -303,7 +303,7 @@ Shows a zoomed FFT spectrum with overlaid peak lines from four frequency-estimat
 
 ### Frequency Spectrum Analysis
 
-![Frequency Spectrum Analysis](doc\image\Frequency Spectrum Analysis.png)
+![Frequency](doc/image/Frequency Spectrum Analysis.png)
 
 ------
 
