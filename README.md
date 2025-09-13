@@ -7,6 +7,7 @@ This project is a Python-based desktop application for real-time acquisition (da
 - Real-time display of raw ADC data from four virtual antennas.
 - Real-time display of constellation diagrams for four virtual antennas.
 - Real-time display of amplitude and phase fluctuation diagrams for four virtual antennas.
+- Real-time display of waterfall for antenna select in UI
 - Real-time calculation and display of 1D FFT results.
 - Real-time calculation and display of 2D FFT (range-Doppler) results.
 - Real-time calculation and display of 2D point clouds.
@@ -115,6 +116,35 @@ Each channel plots I (red) and Q (blue) separately for real-time observation of 
 ### Real-time ADC Interface
 
 ![adc](doc/image/ADC.png)
+
+------
+
+### Waterfall Plot (tab page: Signal Waterfall)
+
+Displays **time-frequency intensity distribution** of selected antenna channel signals.
+Visualizes amplitude variations across chirps and samples as a color-mapped heatmap, enabling temporal and spectral pattern analysis.
+
+**Main Features:**
+
+- **Channel-specific visualization**
+  Focuses on a user-selected antenna channel (TX0RX0, TX0RX1, TX1RX0, TX1RX1) for detailed analysis.
+- **2D intensity mapping**
+  Y-axis represents chirp indices (1-32), X-axis represents sample points (0-255), with color encoding signal amplitude (brighter = stronger).
+- **Real-time rolling update**
+  New chirp data is inserted at the top of the plot, with older data scrolling downward to maintain a continuous time-series view.
+- **Auto-level adjustment**
+  Dynamically adjusts color scaling to optimize contrast for the current signal range.
+
+**Use Cases:**
+
+- Identify time-varying signal patterns across chirps (e.g., Doppler shifts, transient reflections).
+- Detect sample-specific anomalies (e.g., noise bursts, synchronization errors).
+- Compare channel performance by switching between antenna combinations.
+- Monitor signal stability over multiple frames (e.g., fading, interference).
+
+### Signal Waterfall Interface
+
+![Signal Waterfall Interface](doc\image\waterfall.png)
 
 ------
 
@@ -245,6 +275,35 @@ Performs **fast Fourier transform (FFT)** on the ADC time-domain signal of each 
 ### 1D FFT (Range Spectrum)  Interface
 
 ![1D FFT (Range Spectrum) ](doc/image/1dfft.png)
+
+------
+
+### Frequency Spectrum Analysis (tab page: Frequency)
+
+Displays **frequency-domain spectra and algorithmic peak markers** derived from I/Q data.
+Shows a zoomed FFT spectrum with overlaid peak lines from four frequency-estimation algorithms for precision comparison.
+
+**Main Features:**
+
+- **Zoomed spectrum focus**
+  Automatically centers on the FFT peak with a ±2 bin range, highlighting the critical frequency region.
+- **Four-algorithm peak markers**
+  Distinct colored vertical lines represent peaks from FFT (red), Macleod (blue), CZT (green), and Macleod-CZT combo (magenta) algorithms.
+- **Auto-scaling axes**
+  Y-axis adjusts to spectrum amplitude with 5% padding; X-axis locks to the zoomed frequency range for consistent visualization.
+- **Real-time synchronization**
+  Updates with each new frame of I/Q data, ensuring peak markers reflect the latest signal characteristics.
+
+**Use Cases:**
+
+- Evaluate frequency-estimation precision across different algorithms.
+- Identify discrepancies between FFT bin centers and sub-bin estimation methods.
+- Verify stability of peak detection under varying signal conditions.
+- Compare computational efficiency vs. accuracy tradeoffs (via marker consistency).
+
+### Frequency Spectrum Analysis
+
+![Frequency Spectrum Analysis](doc\image\Frequency Spectrum Analysis.png)
 
 ------
 
