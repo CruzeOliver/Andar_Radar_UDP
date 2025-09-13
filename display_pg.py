@@ -1,6 +1,7 @@
 from typing import Dict, Any, List
 from PyQt5.QtWidgets import QVBoxLayout, QWidget, QGraphicsPathItem
-from PyQt5.QtCore import QRectF,Qt
+from PyQt5.QtCore import QRectF, Qt
+from PyQt5 import QtCore
 import pyqtgraph as pg
 from pyqtgraph import ImageView
 from pyqtgraph.opengl import GLViewWidget, GLMeshItem, GLAxisItem
@@ -563,6 +564,14 @@ class PgDisplay:
         f_czt = diag.get('f_czt_only_Hz', None)
         f_combo = diag.get('f_combo_Hz', None)
 
+        czt_combo_spectrum = diag.get('czt_combo_spectrum', None)
+        f_start_czt_combo = diag.get('f_start_combo_Hz', 0.0)
+        df_czt_combo = diag.get('df_combo_Hz', 1.0)
+
+        czt_spectrum = diag.get('czt_only_spectrum', None)
+        f_start_czt = diag.get('f_start_czt_only_Hz', 0.0)
+        df_czt = diag.get('df_czt_only_Hz', 1.0)
+
         # 确保图表句柄存在 - 支持所有已初始化的图表
         for key, h in self.pg_frequency_dict.items():
             # 获取 PlotWidget 句柄
@@ -576,6 +585,8 @@ class PgDisplay:
             curve_macleod = h.get('Macleod')
             curve_czt = h.get('CZT')
             curve_combo = h.get('Macleod-CZt')
+            curve_czt_combo = h.get('czt_combo_spectrum')
+            curve_czt_only = h.get('czt_spectrum')
 
             try:
                 # 验证IQ数据形状有效性
@@ -622,9 +633,37 @@ class PgDisplay:
                 if curve_fft:
                     curve_fft.setData(zoomed_freq_axis, zoomed_fft_spectrum)
 
+                # 绘制 CZT 组合频谱（增加数据有效性检查）
+                if curve_czt_combo and czt_combo_spectrum is not None:
+                    # 确保 CZT 频谱数据有效（有限值且非空）
+                    if len(czt_combo_spectrum) == 0 or not np.all(np.isfinite(czt_combo_spectrum)):
+                        curve_czt_combo.clear()  # 无效数据时清除曲线
+                    else:
+                        # 生成 CZT 频谱的频率轴（避免与FFT轴冲突）
+                        czt_freq_axis = f_start_czt_combo + np.arange(len(czt_combo_spectrum)) * df_czt_combo
+                        # 限制 CZT 频谱动态范围，避免极端值
+                        czt_abs = np.abs(czt_combo_spectrum)
+                        czt_max = np.percentile(czt_abs, 99.9)
+                        czt_clipped = np.clip(czt_abs, 0, czt_max)
+                        curve_czt_combo.setData(czt_freq_axis, czt_clipped)
+
+                # 绘制 CZT 单独频谱（增加数据有效性检查）
+                if curve_czt_only and czt_spectrum is not None:
+                    # 确保 CZT 频谱数据有效（有限值且非空）
+                    if len(czt_spectrum) == 0 or not np.all(np.isfinite(czt_spectrum)):
+                        curve_czt_only.clear()  # 无效数据时清除曲线
+                    else:
+                        # 生成 CZT 频谱的频率轴（避免与FFT轴冲突）
+                        czt_freq_axis_only = f_start_czt + np.arange(len(czt_spectrum)) * df_czt
+                        # 限制 CZT 频谱动态范围，避免极端值
+                        czt_abs_only = np.abs(czt_spectrum)
+                        czt_max_only = np.percentile(czt_abs_only, 99.9)
+                        czt_clipped_only = np.clip(czt_abs_only, 0, czt_max_only)
+                        curve_czt_only.setData(czt_freq_axis_only, czt_clipped_only)
+
                 # 计算参考幅值（用于垂直线高度）
-                magnitude = np.max(zoomed_fft_spectrum) if len(zoomed_fft_spectrum) > 0 else 1.0
-                magnitude = float(magnitude) if np.isfinite(magnitude) else 1.0
+                magnitude = np.max(czt_combo_spectrum) if len(czt_combo_spectrum) > 0 else 1.0
+                magnitude = np.real(magnitude) if np.isfinite(magnitude) else 1.0
 
                 # 绘制各算法的垂直线（增加有效性检查）
                 algorithms = [
@@ -650,7 +689,9 @@ class PgDisplay:
                 # 动态调整Y轴范围
                 if len(zoomed_fft_spectrum) > 0:
                     max_amp = np.max(zoomed_fft_spectrum)
-                    padding = 0.1 * max_amp  # 增加更多余量
+                    #max_amp = np.real(max_amp)
+                    #max_amp = np.abs(float(max_amp))
+                    padding = 0.5 * max_amp  # 增加更多余量
                     y_min, y_max = 0.0, float(max_amp + padding)
                     # 限制最大范围，防止溢出
                     if y_max > 1e12:
@@ -671,7 +712,7 @@ class PgDisplay:
             except Exception as e:
                 print(f"更新频率图表 {key} 时出错: {str(e)}")
                 # 出错时清除曲线，避免显示错误数据
-                for curve in [curve_fft, curve_macleod, curve_czt, curve_combo]:
+                for curve in [curve_fft, curve_macleod, curve_czt, curve_combo, curve_fft_peak, curve_czt_combo , curve_czt_only]:
                     if curve:
                         curve.clear()
 
@@ -1006,10 +1047,13 @@ class PgDisplay:
             curve_algo_2 = pw.plot(pen=pg.mkPen('b', width=2), name='Macleod')  # 蓝色
             curve_algo_3 = pw.plot(pen=pg.mkPen('g', width=2), name='CZT')  # 绿色
             curve_algo_4 = pw.plot(pen=pg.mkPen('m', width=2), name='Macleod-CZt')  # 品红色
+            curve_algo_5 = pw.plot(pen=pg.mkPen('c', width=2), name='czt_combo_spectrum')  # 青色
+            curve_algo_6 = pw.plot(pen=pg.mkPen('y', width=2), name='czt_spectrum')  # 黄色
 
             # 保存句柄，方便后续更新
             self.pg_frequency_dict[key] = {'pw': pw, 'FFT': curve_algo_0,'FFT-Peak': curve_algo_1, 'Macleod': curve_algo_2,
-                                           'CZT': curve_algo_3,'Macleod-CZt': curve_algo_4}
+                                           'CZT': curve_algo_3,'Macleod-CZt': curve_algo_4, 'czt_combo_spectrum': curve_algo_5,
+                                           'czt_spectrum': curve_algo_6}
 
     def _init_fft2d(self, placeholders: Dict[str, QWidget]):
         for key, container in placeholders.items():

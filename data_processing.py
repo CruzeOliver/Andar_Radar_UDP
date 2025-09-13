@@ -457,12 +457,14 @@ def calculate_distance_from_iq(
         "df_czt_only_Hz": float(df1),
         "f_czt_only_Hz": float(f_czt_only),
         "pk_czt_only": int(pk1),
+        "czt_only_spectrum": Xc1,
         # 组合（算法4）
         "f_start_combo_Hz": float(f_start_combo),
         "df_combo_Hz": float(df2),
         "f_combo_Hz": float(f_combo),
         "pk_combo": int(pk2),
         "delta_combo_bins": float(delta2),
+        "czt_combo_spectrum": Xc2,
         "sample_slice": sample_slice if sample_slice else "full"
     }
 
