@@ -542,7 +542,142 @@ class PgDisplay:
             except Exception:
                 pass
 
-    def update_frequency(self, diag: dict):
+
+    def update_frequency(self, iq: np.ndarray, diag: dict):
+        """
+        更新频率图表，绘制 FFT 峰值附近的频谱，并用不同颜色的线表示四种算法的峰值。
+
+        参数:
+            iq : ndarray
+                复数 IQ 数据，形状为 (n_ant, n_chirp, n_sample)
+            diag : dict
+                包含四种算法的峰值频率字典：
+                - 'f_fft_peak_Hz'
+                - 'f_macleod_Hz'
+                - 'f_czt_only_Hz'
+                - 'f_combo_Hz'
+        """
+        # 从 diag 中获取频率峰值，增加默认值处理
+        f_fft_peak = diag.get('f_fft_peak_Hz', None)
+        f_macleod = diag.get('f_macleod_Hz', None)
+        f_czt = diag.get('f_czt_only_Hz', None)
+        f_combo = diag.get('f_combo_Hz', None)
+
+        # 确保图表句柄存在 - 支持所有已初始化的图表
+        for key, h in self.pg_frequency_dict.items():
+            # 获取 PlotWidget 句柄
+            pw = h.get('pw')
+            if not pw:
+                continue
+
+            # 获取所有曲线句柄
+            curve_fft = h.get('FFT')
+            curve_fft_peak = h.get('FFT-Peak')
+            curve_macleod = h.get('Macleod')
+            curve_czt = h.get('CZT')
+            curve_combo = h.get('Macleod-CZt')
+
+            try:
+                # 验证IQ数据形状有效性
+                if len(iq.shape) != 3:
+                    raise ValueError(f"IQ数据形状无效: {iq.shape}, 期望 (n_ant, n_chirp, n_sample)")
+
+                n_ant, n_chirp, n_sample = iq.shape
+                if n_sample <= 0:
+                    raise ValueError(f"样本数量无效: {n_sample}")
+
+                # 计算频谱（使用第一个天线和第一个chirp的数据）
+                fs = 7.14 * 1e6
+                freq_axis = np.fft.fftfreq(n_sample, 1/fs)
+                fft_spectrum = np.abs(np.fft.fft(iq[0, 0, :]))
+
+                # 频谱处理：去除异常值并标准化
+                valid_mask = np.isfinite(fft_spectrum)
+                if not np.any(valid_mask):
+                    raise ValueError("频谱数据全部为无效值")
+
+                fft_spectrum = fft_spectrum[valid_mask]
+                freq_axis = freq_axis[valid_mask]
+
+                # 限制频谱动态范围，避免极端值
+                max_val = np.percentile(fft_spectrum, 99.9)
+                fft_spectrum = np.clip(fft_spectrum, 0, max_val)
+
+                # 获取峰值频率点的索引（FFT）
+                peak_idx = np.argmax(fft_spectrum)
+
+                # 提取峰值附近的频谱数据（动态调整范围）
+                range_bins = 2
+                start_idx = max(peak_idx - range_bins, 0)
+                end_idx = min(peak_idx + range_bins + 1, len(fft_spectrum))
+
+                # 确保有效范围
+                if start_idx >= end_idx:
+                    start_idx, end_idx = max(0, peak_idx - 1), min(len(fft_spectrum), peak_idx + 2)
+
+                zoomed_freq_axis = freq_axis[start_idx:end_idx]
+                zoomed_fft_spectrum = fft_spectrum[start_idx:end_idx]
+
+                # 更新FFT曲线（显示局部放大频谱）
+                if curve_fft:
+                    curve_fft.setData(zoomed_freq_axis, zoomed_fft_spectrum)
+
+                # 计算参考幅值（用于垂直线高度）
+                magnitude = np.max(zoomed_fft_spectrum) if len(zoomed_fft_spectrum) > 0 else 1.0
+                magnitude = float(magnitude) if np.isfinite(magnitude) else 1.0
+
+                # 绘制各算法的垂直线（增加有效性检查）
+                algorithms = [
+                    (curve_fft_peak, f_fft_peak),
+                    (curve_macleod, f_macleod),
+                    (curve_czt, f_czt),
+                    (curve_combo, f_combo)
+                ]
+
+                for curve, freq in algorithms:
+                    if curve and freq is not None and np.isfinite(freq):
+                        # 确保频率在显示范围内
+                        if zoomed_freq_axis.size > 0:
+                            freq_min, freq_max = np.min(zoomed_freq_axis), np.max(zoomed_freq_axis)
+                            if not (freq_min - 0.1*abs(freq_max) <= freq <= freq_max + 0.1*abs(freq_max)):
+                                # 超出范围时不绘制，避免线条过长
+                                curve.clear()
+                                continue
+                        curve.setData([freq, freq], [0, magnitude * 1.05])  # 稍高于频谱峰值
+                    elif curve:
+                        curve.clear()  # 清除无效数据
+
+                # 动态调整Y轴范围
+                if len(zoomed_fft_spectrum) > 0:
+                    max_amp = np.max(zoomed_fft_spectrum)
+                    padding = 0.1 * max_amp  # 增加更多余量
+                    y_min, y_max = 0.0, float(max_amp + padding)
+                    # 限制最大范围，防止溢出
+                    if y_max > 1e12:
+                        y_max = 1e12
+                    pw.setYRange(y_min, y_max)
+
+                # 动态调整X轴范围
+                if len(zoomed_freq_axis) > 0:
+                    x_min, x_max = float(np.min(zoomed_freq_axis)), float(np.max(zoomed_freq_axis))
+                    if np.isfinite(x_min) and np.isfinite(x_max) and x_max > x_min:
+                        # 增加左右对称的 padding
+                        range_width = x_max - x_min
+                        pw.setXRange(
+                            x_min - 0.05 * range_width,
+                            x_max + 0.05 * range_width
+                        )
+
+            except Exception as e:
+                print(f"更新频率图表 {key} 时出错: {str(e)}")
+                # 出错时清除曲线，避免显示错误数据
+                for curve in [curve_fft, curve_macleod, curve_czt, curve_combo]:
+                    if curve:
+                        curve.clear()
+
+
+
+    def update_frequency2(self, diag: dict):
         """
         更新频率图表。
 
@@ -845,6 +980,7 @@ class PgDisplay:
             # 保存句柄
             self.pg_plot_dict[key] = {'pw': pw, 'MAG': curve, 'metrics_text': metrics_text}
 
+
     def _init_frequency(self, placeholders: Dict[str, QWidget]):
         """
         为每个占位 QWidget 初始化频率图表，
@@ -857,21 +993,23 @@ class PgDisplay:
             pw = pg.PlotWidget()
             self._set_plot_style(pw)  # 设置图表样式
             pw.addLegend(offset=(10, 10))
-            pw.setLabel('bottom', 'Count')  # x 轴为 count
-            pw.setLabel('left', 'Frequency (Hz)')  # y 轴为频率
+            pw.setLabel('bottom', 'Frequency (Hz)')  # x 轴为 count
+            pw.setLabel('left', 'Amplitude')  # y 轴为频率
             pw.setTitle(f"Frequency", color='k', size='12pt')
 
             # 将 PlotWidget 添加到容器的布局中
             layout.addWidget(pw)
 
             # 使用不同的颜色表示不同算法
-            curve_algo_1 = pw.plot(pen=pg.mkPen('r', width=2), name='FFT')  # 红色
+            curve_algo_0 = pw.plot(pen=pg.mkPen('k', width=2), name='FFT')  # 黑色
+            curve_algo_1 = pw.plot(pen=pg.mkPen('r', width=2), name='FFT-Peak')  # 红色
             curve_algo_2 = pw.plot(pen=pg.mkPen('b', width=2), name='Macleod')  # 蓝色
             curve_algo_3 = pw.plot(pen=pg.mkPen('g', width=2), name='CZT')  # 绿色
             curve_algo_4 = pw.plot(pen=pg.mkPen('m', width=2), name='Macleod-CZt')  # 品红色
 
             # 保存句柄，方便后续更新
-            self.pg_frequency_dict[key] = {'pw': pw, 'FFT': curve_algo_1, 'Macleod': curve_algo_2,'CZT': curve_algo_3,'Macleod-CZt': curve_algo_4}
+            self.pg_frequency_dict[key] = {'pw': pw, 'FFT': curve_algo_0,'FFT-Peak': curve_algo_1, 'Macleod': curve_algo_2,
+                                           'CZT': curve_algo_3,'Macleod-CZt': curve_algo_4}
 
     def _init_fft2d(self, placeholders: Dict[str, QWidget]):
         for key, container in placeholders.items():

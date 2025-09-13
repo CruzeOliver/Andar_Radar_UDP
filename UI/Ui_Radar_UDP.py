@@ -446,7 +446,7 @@ class Ui_MainWindow(object):
 
         self.retranslateUi(MainWindow)
         self.tabWidget_Message.setCurrentIndex(0)
-        self.tabWidget_Display.setCurrentIndex(5)
+        self.tabWidget_Display.setCurrentIndex(0)
         self.pushButton_Connect.clicked.connect(MainWindow.UDP_connect) # type: ignore
         self.pushButton_Disconnect.clicked.connect(MainWindow.UDP_disconnect) # type: ignore
         self.pushButton_ReadFile.clicked.connect(MainWindow.ReadFile) # type: ignore

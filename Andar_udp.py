@@ -228,7 +228,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         self.fft_results_1D = Perform1D_FFT(iq)
         self.fft_results_2D = Perform2D_FFT(self.fft_results_1D)
         R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod,diag = calculate_distance_from_iq(iq,r_bins=2,M=32,use_window=None,coherent=True)
-        self.display.update_frequency(diag)
+        self.display.update_frequency(iq,diag)
         if self.checkBox_CalibrationMode.isChecked():
             #得到2DFFT的峰值索引 对应的zij向量
             peak_idx = np.unravel_index(np.argmax(np.abs(self.fft_results_2D[0])), self.fft_results_2D[0].shape)
@@ -516,7 +516,7 @@ class MyMainForm(QMainWindow, Ui_MainWindow):
         iq = reorder_frame(frame_data_flat, int(chirp), int(sample),window=my_window)
         #距离计算函数，CZT采用时域变换
         R_fft, R_macleod, R_czt_fftpeak, R_czt_macleod,diag = calculate_distance_from_iq(iq,r_bins=2,M=32,use_window=None,coherent=True)
-        self.display.update_frequency(diag)
+        self.display.update_frequency(iq,diag)
         self.fft_results_1D = Perform1D_FFT(iq)
         self.fft_results_2D  = Perform2D_FFT(self.fft_results_1D)
         if self.checkBox_CalibrationMode.isChecked():
